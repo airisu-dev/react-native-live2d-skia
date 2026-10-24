@@ -86,3 +86,4 @@ cubism-sdk/
 # Built config plugin and CLI (tsc -b plugin cli)
 plugin/build/
 cli/build/
+.skia-compat/
