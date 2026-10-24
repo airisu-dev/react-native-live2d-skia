@@ -8,6 +8,7 @@ import {
   issueTitle,
   markerOf,
   planIssues,
+  splitErrors,
 } from './skiaCompatReport'
 
 const ok = { ok: true, output: '' }
@@ -29,6 +30,46 @@ describe('failuresOf', () => {
       result('3.9.0', ok, ok),
     ])
     expect(failures.map((f) => `${f.version}:${f.check}`)).toEqual(['3.8.0:types', '3.8.0:native'])
+  })
+})
+
+describe('splitErrors', () => {
+  const two = `${typeError('A')}\n${typeError('B', 9)}`
+
+  test('splits tsc output at each error, keeping its continuation lines', () => {
+    const errors = splitErrors(two)
+    expect(errors.length).toBe(2)
+    expect(errors[0]).toContain("Property 'A' is missing")
+    expect(errors[0]).not.toContain("Property 'B'")
+    expect(errors[1]).toContain("Property 'B' is missing")
+  })
+
+  test('splits native output into one entry per error, with its source file', () => {
+    expect(
+      splitErrors(
+        'SkiaDrawer.cpp\nx.cpp:1:1: error: a\nx.cpp:2:1: error: b\n\nMeshCache.cpp\ny.cpp:3:1: error: c',
+      ),
+    ).toEqual([
+      'SkiaDrawer.cpp: x.cpp:1:1: error: a',
+      'SkiaDrawer.cpp: x.cpp:2:1: error: b',
+      'MeshCache.cpp: y.cpp:3:1: error: c',
+    ])
+  })
+
+  test('is empty for no output', () => {
+    expect(splitErrors('  \n')).toEqual([])
+  })
+
+  test('a version that breaks in two ways is two failures, and each way is its own issue', () => {
+    const groups = groupFailures(
+      failuresOf([
+        result('3.4.3', { ok: false, output: typeError('A') }),
+        result('3.8.0', { ok: false, output: two }),
+      ]),
+    )
+    expect(groups.map((g) => g.versions.join(','))).toEqual(['3.4.3,3.8.0', '3.8.0'])
+    expect(groups[1]!.output).toContain("Property 'B'")
+    expect(groups[1]!.output).not.toContain("Property 'A'")
   })
 })
 

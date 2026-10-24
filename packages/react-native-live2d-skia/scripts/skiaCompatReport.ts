@@ -34,6 +34,26 @@ export interface Group {
   output: string
 }
 
+/**
+ * One entry per error: a version that breaks in two ways is two failures, so each way gets its own
+ * issue with only its own text. tsc errors start at `check.ts(`; native output is `<unit>.cpp`
+ * followed by its error lines.
+ */
+export function splitErrors(output: string): string[] {
+  const text = output.trim()
+  if (!text) return []
+  if (/^check\.ts\(/m.test(text)) {
+    return text
+      .split(/\n(?=check\.ts\()/)
+      .map((error) => error.trim())
+      .filter(Boolean)
+  }
+  return text.split('\n\n').flatMap((block) => {
+    const [unit, ...lines] = block.split('\n')
+    return lines.length > 0 ? lines.map((line) => `${unit}: ${line}`) : [block]
+  })
+}
+
 export function failuresOf(results: VersionResult[]): Failure[] {
   const failures: Failure[] = []
   for (const r of results) {
@@ -42,8 +62,11 @@ export function failuresOf(results: VersionResult[]): Failure[] {
       ['native', r.native],
     ]
     for (const [check, result] of checks) {
-      if (result && !result.ok)
-        failures.push({ pkg: r.pkg, version: r.version, check, output: result.output })
+      if (!result || result.ok) continue
+      const errors = splitErrors(result.output)
+      for (const output of errors.length > 0 ? errors : [result.output]) {
+        failures.push({ pkg: r.pkg, version: r.version, check, output })
+      }
     }
   }
   return failures
@@ -82,7 +105,7 @@ export function groupFailures(failures: Failure[]): Group[] {
       versions: [],
       output: f.output,
     }
-    group.versions.push(f.version)
+    if (!group.versions.includes(f.version)) group.versions.push(f.version)
     groups.set(key, group)
   }
   return [...groups.values()]

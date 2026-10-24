@@ -93,16 +93,21 @@ describe('typeCheckSource', () => {
   })
 
   test('assigns every part Skia must provide, one statement each', () => {
-    for (const part of [
-      'Skia',
-      'BlendMode',
-      'VertexMode',
-      'TileMode',
-      'FilterMode',
-      'MipmapMode',
-    ]) {
+    for (const part of ['BlendMode', 'VertexMode', 'TileMode', 'FilterMode', 'MipmapMode']) {
       expect(source).toContain(`SkiaModule['${part}'] = Real.${part}`)
     }
+    // Each member of Skia apart, so one mismatch can't hide another.
+    for (const member of [
+      'XYWHRect',
+      'Paint',
+      'PictureRecorder',
+      'MakeVertices',
+      'Image',
+      'Data',
+    ]) {
+      expect(source).toContain(`SkiaModule['Skia']['${member}'] = Real.Skia.${member}`)
+    }
+    expect(source).not.toContain(`SkiaModule['Skia'] = Real.Skia`)
     expect(source).toContain('Real.Group')
     expect(source).toContain('Real.Picture')
   })
