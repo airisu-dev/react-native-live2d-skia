@@ -97,11 +97,15 @@ jobs:
           GITHUB_RELEASE: ${{ steps.plan.outputs.githubRelease }}
           SKIP: ${{ steps.plan.outputs.skip }}
 
-      # Committed for a stable release only.
+      # Committed for a stable release only. Not `npm version`: it fails on the apps' workspace:*
+      # dependencies. `bun pm version` errors when the version is already the one to release.
       - name: Set the version
         if: steps.plan.outputs.skip != 'true'
         working-directory: ${{ env.PACKAGE_DIR }}
-        run: npm version "$VERSION" --no-git-tag-version --allow-same-version
+        run: |
+          if [[ "$(node -p "require('./package.json').version")" != "$VERSION" ]]; then
+            bun pm version "$VERSION" --no-git-tag-version
+          fi
         env:
           VERSION: ${{ steps.plan.outputs.version }}
 
