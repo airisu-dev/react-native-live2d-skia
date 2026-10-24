@@ -12,6 +12,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit && tsc --noEmit -p plugin && tsc --noEmit -p cli",
     "test": "bun test",
+    "verify:package": "bun scripts/verifyPackage.ts",
     "clean": "git clean -dfX",
     "build": "bun run typecheck && bob build && tsc -b plugin/tsconfig.build.json cli/tsconfig.build.json",
     "codegen": "nitrogen --logLevel=debug",
