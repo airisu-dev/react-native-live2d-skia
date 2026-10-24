@@ -10,12 +10,13 @@
     "react-native-live2d-skia": "cli/build/index.js"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p plugin && tsc --noEmit -p cli",
+    "test": "bun test",
     "clean": "git clean -dfX",
-    "build": "bun run typecheck && bob build && tsc -b plugin cli",
+    "build": "bun run typecheck && bob build && tsc -b plugin/tsconfig.build.json cli/tsconfig.build.json",
     "codegen": "nitrogen --logLevel=debug",
-    "build:node": "tsc -b plugin cli",
-    "prepack": "tsc -b plugin cli"
+    "build:node": "tsc -b plugin/tsconfig.build.json cli/tsconfig.build.json",
+    "prepack": "tsc -b plugin/tsconfig.build.json cli/tsconfig.build.json"
   },
   "keywords": [
     "react-native",
@@ -23,6 +24,7 @@
   ],
   "files": [
     "src",
+    "!**/*.test.ts",
     "react-native.config.js",
     "lib",
     "nitrogen",
@@ -54,6 +56,7 @@
     "registry": "https://registry.npmjs.org/"
   },
   "devDependencies": {
+    "@types/bun": "^1.4.4",
     "@types/node": "26.6.5",
     "@types/react": "19.2.0",
     "nitrogen": "^0.37.1",
@@ -121,13 +124,14 @@
   "react-native-builder-bob": {
     "source": "src",
     "output": "lib",
+    "exclude": "**/{__tests__,__fixtures__,__mocks__}/**,**/*.test.ts",
     "targets": [
       "commonjs",
       "module",
       [
         "typescript",
         {
-          "project": "tsconfig.json"
+          "project": "tsconfig.build.json"
         }
       ]
     ]

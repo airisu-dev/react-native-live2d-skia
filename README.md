@@ -176,7 +176,7 @@ Cubism Core is under the Live2D Proprietary Software License, which allows redis
 
 Apps built on the SDK by businesses above 10M JPY annual revenue also need Live2D's Cubism SDK Release License. To support another SDK version, add it with its `sha256` to `cubismSdk.versions` (and move `latest` if it's newer), and put calls that differ between versions in `cpp/cubism/CubismCompat.hpp`. Only 5-r.5 is listed for now.
 
-The plugin and the CLI are TypeScript, built to `plugin/build` and `cli/build` (`tsc -b plugin cli`, gitignored). The repo's `postinstall` builds them, and so does `prepack` before publishing: Expo CLI only loads `app.plugin.js`, and Node won't run TypeScript from `node_modules`.
+The plugin and the CLI are TypeScript, built to `plugin/build` and `cli/build` (`tsc -b plugin/tsconfig.build.json cli/tsconfig.build.json`, gitignored). The repo's `postinstall` builds them, and so does `prepack` before publishing: Expo CLI only loads `app.plugin.js`, and Node won't run TypeScript from `node_modules`.
 
 ### Assets
 

@@ -51,9 +51,9 @@ function fail(message: string): never {
   process.exit(1)
 }
 
-function parseArgs(argv: string[]): Args {
+export function parseArgs(argv: string[]): Args {
   const args: Args = {
-    command: argv[0],
+    command: argv[0] === '--help' || argv[0] === '-h' ? 'help' : argv[0],
     acceptLicense: false,
     version: cubismSdk.latest,
     out: DEFAULT_OUT,
@@ -71,12 +71,12 @@ function parseArgs(argv: string[]): Args {
       args.out = next
       i++
     } else if (arg === '--help' || arg === '-h') args.command = 'help'
-    else fail(`unknown option ${arg}`)
+    else throw new Error(`unknown option ${arg}`)
   }
   return args
 }
 
-const sha256 = (file: string) =>
+export const sha256 = (file: string) =>
   crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')
 
 async function download(url: string, file: string) {
@@ -163,4 +163,6 @@ async function main() {
   }
 }
 
-main().catch((e: unknown) => fail(e instanceof Error ? e.message : String(e)))
+if (require.main === module) {
+  main().catch((e: unknown) => fail(e instanceof Error ? e.message : String(e)))
+}

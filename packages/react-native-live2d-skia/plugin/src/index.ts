@@ -38,7 +38,19 @@ const pkg = JSON.parse(
 const relativeTo = (dir: string, target: string) =>
   path.relative(dir, target).split(path.sep).join('/')
 
-const withLive2dSkia: ConfigPlugin<Live2dSkiaPluginProps | undefined> = (config, props) => {
+export function nativeProperties(
+  projectRoot: string,
+  platformProjectRoot: string,
+  sdkPath: string,
+) {
+  const sdkDir = path.resolve(projectRoot, sdkPath)
+  return {
+    [SDK_PROPERTY]: relativeTo(platformProjectRoot, sdkDir),
+    [SKIA_PROPERTY]: skiaPackageOf(projectRoot),
+  }
+}
+
+export const withLive2dSkia: ConfigPlugin<Live2dSkiaPluginProps | undefined> = (config, props) => {
   const sdkPath = props?.cubismSdkPath
   if (!sdkPath) {
     throw new Error(
@@ -48,18 +60,10 @@ const withLive2dSkia: ConfigPlugin<Live2dSkiaPluginProps | undefined> = (config,
     )
   }
 
-  const properties = (projectRoot: string, platformProjectRoot: string) => {
-    const sdkDir = path.resolve(projectRoot, sdkPath)
-    return {
-      [SDK_PROPERTY]: relativeTo(platformProjectRoot, sdkDir),
-      [SKIA_PROPERTY]: skiaPackageOf(projectRoot),
-    }
-  }
-
   config = withGradleProperties(config, (c) => {
     const { projectRoot, platformProjectRoot } = c.modRequest
     warnIfMissing(path.resolve(projectRoot, sdkPath))
-    const values = properties(projectRoot, platformProjectRoot)
+    const values = nativeProperties(projectRoot, platformProjectRoot, sdkPath)
     c.modResults = c.modResults.filter((item) => !(item.type === 'property' && item.key in values))
     for (const [key, value] of Object.entries(values)) {
       c.modResults.push({ type: 'property', key, value })
@@ -69,7 +73,7 @@ const withLive2dSkia: ConfigPlugin<Live2dSkiaPluginProps | undefined> = (config,
 
   config = withPodfileProperties(config, (c) => {
     const { projectRoot, platformProjectRoot } = c.modRequest
-    Object.assign(c.modResults, properties(projectRoot, platformProjectRoot))
+    Object.assign(c.modResults, nativeProperties(projectRoot, platformProjectRoot, sdkPath))
     return c
   })
 
@@ -79,7 +83,7 @@ const withLive2dSkia: ConfigPlugin<Live2dSkiaPluginProps | undefined> = (config,
 // The Skia package the app depends on, by its own package.json: in a monorepo
 // both can be installed, but an app uses one. Empty when it has neither: the
 // native build then leaves out the C++ drawer.
-function skiaPackageOf(projectRoot: string): string {
+export function skiaPackageOf(projectRoot: string): string {
   const appPackage = JSON.parse(
     fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8'),
   ) as { dependencies?: Record<string, string> }
@@ -98,7 +102,7 @@ function skiaPackageOf(projectRoot: string): string {
 }
 
 // Not an error: CI may fetch the SDK after prebuild. The native build checks again.
-function warnIfMissing(sdkDir: string) {
+export function warnIfMissing(sdkDir: string) {
   if (!fs.existsSync(path.join(sdkDir, 'cubism-info.yml'))) {
     console.warn(
       `[react-native-live2d-skia] Cubism SDK for Native not found at ${sdkDir}. ${FETCH_HINT}`,
