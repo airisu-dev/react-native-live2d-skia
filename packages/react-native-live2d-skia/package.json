@@ -17,7 +17,7 @@
     "build": "bun run typecheck && bob build && tsc -b plugin/tsconfig.build.json cli/tsconfig.build.json",
     "codegen": "nitrogen --logLevel=debug",
     "build:node": "tsc -b plugin/tsconfig.build.json cli/tsconfig.build.json",
-    "prepack": "tsc -b plugin/tsconfig.build.json cli/tsconfig.build.json"
+    "prepack": "bash ../../scripts/copy-readme.sh && tsc -b plugin/tsconfig.build.json cli/tsconfig.build.json"
   },
   "keywords": [
     "react-native",

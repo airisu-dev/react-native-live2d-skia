@@ -1,6 +1,6 @@
 # Development
 
-Notes for working on this repo. For usage, see the [README](./README.md).
+Notes for working on this repo. For installation and usage, see the [README](./README.md).
 
 ## Layout
 
@@ -37,7 +37,7 @@ Run installs and the shared scripts (`lint`, `typecheck`, `codegen`, `fetch:cubi
 ### Layers
 
 1. **C++ core (shared)**
-   - Cubism Core (`.a` on iOS / `.so` on Android) — proprietary, supplied by the user (see [Licensing](./README.md#licensing)).
+   - Cubism Core (`.a` on iOS / `.so` on Android) — proprietary, supplied by the user (see [How the Cubism SDK is wired in](#how-the-cubism-sdk-is-wired-in)).
    - Open-source **CubismNativeFramework**. Its motion, physics, expression, pose, eye-blink and lip-sync modules don't depend on a renderer, so they are used as-is. Its renderer is **not** used.
 2. **JSI binding**
    - Expose a `Live2DModel` host object via **Nitro Modules** or a **C++ TurboModule**.
@@ -106,3 +106,24 @@ The React Compiler is on, and it compiles the workspace package too. A `let` rea
 
 - `Pan().activateAfterLongPress`: `onBegin` doesn't run before `onStart` the way you'd expect, so don't save the press position in `onBegin` for `onStart`. Read it from `onStart`'s own event; the finger has barely moved by then.
 - Combining separate per-model gestures with `Gesture.Simultaneous` doesn't make their inner gestures simultaneous with each other. Use one gesture for all models (`useLive2DGestures`).
+
+## How the Cubism SDK is wired in
+
+Cubism Core is under the Live2D Proprietary Software License, which allows redistributing it only inside a finished app for its end users, not in a package for other developers. So **neither the npm package nor this repo contains any of the SDK**, the same as `pixi-live2d-display`. Each app downloads Cubism SDK for Native from Live2D itself, accepting the license, and points the package at it:
+- `@airisu-dev/react-native-live2d-skia fetch-sdk --accept-license [--sdk-version <version>] [--out <dir>]` (`cli/src`, run through any package manager: `npx`, `bunx`, …) downloads the official zip of a supported version (default: the latest) and checks its SHA-256.
+- The config plugin (`plugin/src`, loaded by `app.plugin.js`, option `cubismSdkPath`, relative to the app's root) writes the folder into `android/gradle.properties` and `ios/Podfile.properties.json` as `live2dSkia.cubismSdkPath`, relative to the native folder. The environment variable `LIVE2D_SKIA_CUBISM_SDK` overrides it.
+- `android/build.gradle` and `Live2dSkia.podspec` read it, check the SDK's `cubism-info.yml` version against `cubismSdk.versions` in the package's `package.json` (a newer release of a listed major warns, anything else unlisted fails), pass it to C++ as `LIVE2D_SKIA_CUBISM_SDK` (5-r.4.1 → `50401`), and build the **Core** and the **Cubism Native Framework** source from that one folder, so the two always match.
+- iOS: CocoaPods only compiles files inside the pod, so at `pod install` the podspec copies the Framework source into the gitignored `cubism-sdk/` and packages the Core's static libraries as an xcframework there (`lipo`, `xcodebuild -create-xcframework`). It's redone when the SDK's folder or version changes.
+
+To support another SDK version, add it with its `sha256` to `cubismSdk.versions` (and move `latest` if it's newer), and put calls that differ between versions in `cpp/cubism/CubismCompat.hpp`. Only 5-r.5 is listed for now.
+
+The plugin and the CLI are TypeScript, built to `plugin/build` and `cli/build` (`tsc -b plugin/tsconfig.build.json cli/tsconfig.build.json`, gitignored). The repo's `postinstall` builds them, and so does `prepack` before publishing: Expo CLI only loads `app.plugin.js`, and Node won't run TypeScript from `node_modules`.
+
+## Skia v2 and v3
+
+The package works with Skia v3 (`react-native-skia`, Graphite) and v2 (`@shopify/react-native-skia`, Ganesh) from 2.10. The APIs it uses are the same in both, in JS and in C++ (`JsiSkNativeObjects.h`, `JsiSkShader.h` and `JsiSkCanvas::getCanvas` match). Before 2.10, Skia objects reach C++ as JSI host objects instead of native state, which `SkiaDrawer` doesn't unwrap.
+- **JS:** `src/rendering/skia.ts` requires v3, else v2 (Expo's Metro treats guarded requires as optional), and declares the few Skia types the library uses itself: its sources are type-checked by the app, which may have only one of the packages.
+- **Native:** the config plugin writes the Skia package the app's `package.json` depends on as `live2dSkia.skiaPackage`. `build.gradle` and the podspec resolve it from the app's folder, not the library's: in a monorepo both versions are installed side by side (different names, so hoisting keeps both). Graphite builds use `SK_GRAPHITE` and the Dawn headers; Ganesh builds `SK_GL SK_GANESH` (Android) or `SK_METAL SK_GANESH` (iOS), and link `react-native-skia-android`'s `libskia.a`.
+- **Monorepo apps on v2** map `react-native-skia` to `@shopify/react-native-skia` in their Metro config (`apps/app-skia2/metro.config.js`).
+- **Compatibility checks:** a daily workflow checks the types and native code against every supported Skia release (`scripts/skiaCompat.ts`).
+- **Changing a package's version with Bun** (2.6.2 to 2.14.0 here) left the old version's extra folders in `node_modules` (2.6.2's `cpp/jsi2`, `android/src/paper`, …), and the Android build failed on the mix: first Skia's `prepareHeaders` on two `EnumMapper.h`, then Java on old classes. Delete the package's folder and reinstall, and delete `android/app/build/generated/autolinking` if autolinking still lists old classes.

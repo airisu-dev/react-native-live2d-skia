@@ -26,11 +26,13 @@ function run(
   return { code: result.status, out: result.stdout ?? '', err: result.stderr ?? '' }
 }
 
-// The plugin and the CLI are published as built JS: build them the way `prepack` does.
+// The plugin and the CLI are published as built JS, and the README is copied from the root: do
+// what `prepack` does.
 const build = run('bun', ['run', 'build:node'])
-if (build.code !== 0) {
-  console.error(build.out + build.err)
-  console.error('verify:package: building the plugin and the CLI failed')
+const readme = run('bash', ['../../scripts/copy-readme.sh'])
+if (build.code !== 0 || readme.code !== 0) {
+  console.error(build.out + build.err + readme.out + readme.err)
+  console.error('verify:package: building the plugin and the CLI, or copying the README, failed')
   process.exit(1)
 }
 

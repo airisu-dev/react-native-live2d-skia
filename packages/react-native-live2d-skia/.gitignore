@@ -87,3 +87,6 @@ cubism-sdk/
 plugin/build/
 cli/build/
 .skia-compat/
+
+# Copied from the root README by prepack
+/README.md
