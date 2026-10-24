@@ -1,6 +1,6 @@
 {
   "name": "@airisu-dev/react-native-live2d-skia",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "react-native-live2d-skia is a react native package built with Nitro",
   "main": "src/index",
   "types": "src/index",
