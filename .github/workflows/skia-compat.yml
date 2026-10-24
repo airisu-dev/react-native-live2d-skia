@@ -1,0 +1,85 @@
+name: Skia compatibility
+
+# Every day, checks every stable react-native-skia (v3) and @shopify/react-native-skia (v2) release
+# this package supports, up to the newest, against the Skia API it uses: the types, and the native
+# code (SkiaDrawer.cpp and MeshCache.cpp compile against its headers). A new incompatibility opens
+# one issue, never the same one twice. Rules and what they check:
+# packages/react-native-live2d-skia/scripts/skiaCompat.ts and skiaCompatReport.ts.
+on:
+  schedule:
+    - cron: "43 5 * * *"
+  workflow_dispatch:
+    inputs:
+      native:
+        description: Also compile the native code against each version
+        type: boolean
+        default: true
+      report:
+        description: Open issues for new incompatibilities (the schedule always does)
+        type: boolean
+        default: false
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/skia-compat.yml
+      - packages/react-native-live2d-skia/scripts/skiaCompat*.ts
+      - packages/react-native-live2d-skia/src/rendering/skia*.ts
+      - packages/react-native-live2d-skia/src/rendering/decodeImage*.ts
+      - packages/react-native-live2d-skia/cpp/drawing/**
+      - packages/react-native-live2d-skia/package.json
+
+concurrency:
+  group: skia-compat-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  PACKAGE_DIR: packages/react-native-live2d-skia
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+
+      # The native check needs the Cubism SDK headers: the same cached download as Test Build.
+      - if: github.event_name != 'workflow_dispatch' || inputs.native
+        uses: actions/cache@v4
+        with:
+          path: apps/app/vendor/CubismSdkForNative-*.zip
+          key: cubism-sdk-${{ hashFiles('scripts/fetch-cubism-sdk.sh', 'packages/react-native-live2d-skia/package.json') }}
+      - if: github.event_name != 'workflow_dispatch' || inputs.native
+        run: bash scripts/fetch-cubism-sdk.sh
+
+      # The runner's Android NDK (ANDROID_NDK_LATEST_HOME) provides the compiler for the native check.
+      - name: Check every supported Skia version
+        run: |
+          args=(--out "$RUNNER_TEMP/skia-compat.json")
+          if [[ "$EVENT" != "workflow_dispatch" || "$NATIVE" == "true" ]]; then args+=(--native); fi
+          # A pull request fails when a version is incompatible. The schedule reports it instead.
+          if [[ "$EVENT" == "pull_request" ]]; then args+=(--fail-on-incompatible); fi
+          bun "$PACKAGE_DIR/scripts/skiaCompat.ts" "${args[@]}"
+        env:
+          EVENT: ${{ github.event_name }}
+          NATIVE: ${{ inputs.native }}
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: skia-compat-results
+          path: ${{ runner.temp }}/skia-compat.json
+          if-no-files-found: ignore
+
+      - name: Open issues for new incompatibilities
+        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.report)
+        run: bun "$PACKAGE_DIR/scripts/skiaCompatReport.ts" "$RUNNER_TEMP/skia-compat.json"
+        env:
+          GH_TOKEN: ${{ github.token }}
