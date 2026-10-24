@@ -1,2 +1,5 @@
-# Shell scripts run on macOS/Linux CI runners; keep LF even with core.autocrlf.
+# LF everywhere, on every platform (Windows checkouts included).
+* text=auto eol=lf
+
+# Shell scripts run on macOS/Linux CI runners.
 *.sh text eol=lf
