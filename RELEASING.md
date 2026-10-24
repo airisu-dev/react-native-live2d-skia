@@ -43,9 +43,13 @@ publishes right away. Merge the pull request with its title unchanged (it must s
 
 ## One-time setup
 
-- **`NPM_TOKEN`** (repo secret): an npm granular access token with read and write on the `@airisu-dev`
-  scope, allowed to bypass 2FA (CI can't type a code). Publishing uses provenance (`id-token: write`).
-  Trusted publishing can replace the secret once the package exists on npm.
+- **npm trusted publishing (OIDC), no token.** On npmjs.com, in the package's Settings > Trusted
+  Publisher > GitHub Actions: organization `airisu-dev`, repository `react-native-live2d-skia`, workflow
+  filename `release.yml`, no environment, and the direct `npm publish` action enabled. The fields are
+  case-sensitive and npm doesn't validate them when you save, so a typo only shows up as a failed
+  publish. A new entry expires if its first publish isn't done within 2 days. Provenance is automatic.
+  It needs npm 11.5.1 or later (the run checks) and `id-token: write` (already set).
+  Afterwards, in Publishing access, choose "Require two-factor authentication and disallow tokens".
 - **Pull requests from Actions:** Settings > Actions > General > "Allow GitHub Actions to create and
   approve pull requests" must be on, for the release pull request.
 - **Checks on the release pull request:** a pull request opened by the workflow doesn't start other

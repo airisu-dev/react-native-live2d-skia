@@ -182,6 +182,8 @@ jobs:
         env:
           VERSION: ${{ steps.plan.outputs.version }}
 
+      # Authenticates with npm trusted publishing (OIDC), so there is no token here. The trusted
+      # publisher (this repository, release.yml) is set on npmjs.com, and provenance is automatic.
       # prepack builds the plugin and the CLI.
       - name: Publish to npm
         if: steps.mode.outputs.prepare != 'true' && steps.plan.outputs.skip != 'true'
@@ -190,10 +192,14 @@ jobs:
           if [[ "$DRY_RUN" == "true" ]]; then
             npm publish --access public --tag "$NPM_TAG" --dry-run
           else
-            npm publish --access public --provenance --tag "$NPM_TAG"
+            npm_version="$(npm --version)"
+            if [[ "$(printf '%s\n' 11.5.1 "$npm_version" | sort -V | head -1)" != "11.5.1" ]]; then
+              echo "::error::npm $npm_version can't publish with trusted publishing: it needs 11.5.1 or later"
+              exit 1
+            fi
+            npm publish --access public --tag "$NPM_TAG"
           fi
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_TAG: ${{ steps.plan.outputs.npmTag }}
           DRY_RUN: ${{ steps.mode.outputs.dry_run }}
 
