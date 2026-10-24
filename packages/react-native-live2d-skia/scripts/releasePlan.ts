@@ -24,7 +24,6 @@ export interface ReleasePlan {
   npmTag: string
   /** A nightly has none. */
   gitTag: string | null
-  commitVersion: boolean
   githubRelease: boolean
   prerelease: boolean
   latest: boolean
@@ -59,7 +58,6 @@ export function planRelease(input: PlanInput): ReleasePlan {
       version,
       npmTag: npmTag || 'nightly',
       gitTag: null,
-      commitVersion: false,
       githubRelease: false,
       prerelease: true,
       latest: false,
@@ -81,7 +79,6 @@ export function planRelease(input: PlanInput): ReleasePlan {
       version,
       npmTag: npmTag || 'next',
       gitTag: `v${version}`,
-      commitVersion: false,
       githubRelease: true,
       prerelease: true,
       latest: false,
@@ -95,7 +92,6 @@ export function planRelease(input: PlanInput): ReleasePlan {
     version,
     npmTag: npmTag || (highest ? 'latest' : 'legacy'),
     gitTag: `v${version}`,
-    commitVersion: true,
     githubRelease: true,
     prerelease: false,
     latest: highest && (npmTag === undefined || npmTag === '' || npmTag === 'latest'),
