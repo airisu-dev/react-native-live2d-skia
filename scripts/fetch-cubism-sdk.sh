@@ -4,7 +4,7 @@
 # apps), and copies the sample models the shared demo uses into
 # packages/demo/assets/live2d/.
 #
-# The SDK's Core is proprietary and is never committed (see the Licensing section of README.md).
+# The SDK's Core is proprietary and is never committed (see "How the Cubism SDK is wired in" in DEVELOPMENT.md).
 # Running this means accepting Live2D's license terms, included in the SDK as LICENSE.md.
 # The supported SDK versions and their checksums are in packages/react-native-live2d-skia/package.json
 # (cubismSdk). CUBISM_SDK_VERSION picks one (default: the latest).
