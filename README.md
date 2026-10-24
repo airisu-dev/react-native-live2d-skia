@@ -248,12 +248,6 @@ The same for one model: `options` is a target (without `model`) plus `focus`.
 | `motionGroups`, `expressionNames`                | What the model has                                                                                                            |
 | `width`, `height`                                | The model's native canvas size                                                                                                |
 
-## Troubleshooting
-
-- **Skia 2.6–2.9:** Skia objects reach C++ as JSI host objects instead of native state, which the drawing code doesn't unwrap. Use 2.10 or later.
-- **Monorepo apps on Skia v2:** map `react-native-skia` to `@shopify/react-native-skia` in the app's Metro config, otherwise a hoisted v3 is found first.
-- **Android build fails after changing Skia's version with Bun:** the old version's folders stay in `node_modules`. Delete the package's folder and reinstall, and delete `android/app/build/generated/autolinking` if autolinking still lists old classes.
-
 ## Contributing
 
 Pull requests are welcome. For major changes, please open an issue first. To build and run the repo, see [DEVELOPMENT.md](https://github.com/airisu-dev/react-native-live2d-skia/blob/main/DEVELOPMENT.md).
