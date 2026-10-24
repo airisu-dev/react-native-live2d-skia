@@ -1,6 +1,7 @@
 import { Asset } from 'expo-asset'
 import { File } from 'expo-file-system'
 import { Live2dSkia } from '../native'
+import { decodeImage } from '../rendering/decodeImage'
 import {
   type CanvasInfo,
   createDrawer,
@@ -102,7 +103,7 @@ async function readAsset(source: AssetSource, options: Live2DLoadOptions): Promi
 
 async function loadTexture(source: AssetSource, options: Live2DLoadOptions): Promise<SkImage> {
   const bytes = new Uint8Array(await readAsset(source, options))
-  const image = Skia.Image.MakeImageFromEncoded(Skia.Data.fromBytes(bytes))
+  const image = decodeImage(Skia.Image, Skia.Data.fromBytes(bytes))
   if (!image) {
     throw new Error(`Live2D: failed to decode texture ${describe(source)}`)
   }
