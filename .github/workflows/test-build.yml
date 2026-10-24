@@ -77,6 +77,14 @@ jobs:
           distribution: temurin
           java-version: "17"
       - uses: android-actions/setup-android@v4
+      - id: ndk
+        run: echo "version=$(awk -F'"' '/^ndkVersion/ {print $2}' node_modules/react-native/gradle/libs.versions.toml)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: |
+            /usr/local/lib/android/sdk/ndk/${{ steps.ndk.outputs.version }}
+            /usr/local/lib/android/sdk/cmake/3.22.1
+          key: android-ndk-${{ steps.ndk.outputs.version }}-${{ hashFiles('node_modules/react-native/gradle/libs.versions.toml') }}
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Prebuild
