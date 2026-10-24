@@ -42,7 +42,7 @@ export interface SkPaint {
 }
 
 export interface SkCanvas {
-  saveLayer(paint?: SkPaint, bounds?: SkRect | null): number
+  saveLayer(paint?: SkPaint | null, bounds?: SkRect | null): number
   restore(): void
   drawVertices(vertices: SkVertices, mode: number, paint: SkPaint): void
 }
@@ -56,6 +56,11 @@ export interface SkData {
   dispose(): void
 }
 
+// Skia 3.8 renamed MakeImageFromEncoded to MakeFromEncoded; v2 and older v3 only have the old name.
+export type SkImageFactory =
+  | { MakeFromEncoded(data: SkData): SkImage | null }
+  | { MakeImageFromEncoded(data: SkData): SkImage | null }
+
 export interface SkiaApi {
   XYWHRect(x: number, y: number, width: number, height: number): SkRect
   Paint(): SkPaint
@@ -67,7 +72,7 @@ export interface SkiaApi {
     colors?: undefined,
     indices?: number[] | null,
   ): SkVertices
-  Image: { MakeImageFromEncoded(data: SkData): SkImage | null }
+  Image: SkImageFactory
   Data: { fromBytes(bytes: Uint8Array): SkData }
 }
 
