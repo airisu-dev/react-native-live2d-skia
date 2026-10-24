@@ -1,0 +1,163 @@
+name: Release
+
+# Run by hand, or nightly on the schedule. How to use it: RELEASING.md.
+# The version and npm tag rules: packages/react-native-live2d-skia/scripts/releasePlan.ts.
+on:
+  workflow_dispatch:
+    inputs:
+      release-type:
+        description: Type of release
+        type: choice
+        options: [stable, rc, beta, alpha, nightly]
+        default: stable
+      version:
+        description: "Version: 1.2.3, or 1.2.3-rc.1 for a candidate (not for a nightly)"
+        type: string
+        default: ""
+      npm-tag:
+        description: npm dist-tag, if it should not be the one the release type picks
+        type: string
+        default: ""
+      notes:
+        description: Your own release notes, shown above the generated ones
+        type: string
+        default: ""
+      dry-run:
+        description: Run every check and show what would be published, but publish nothing
+        type: boolean
+        default: true
+  schedule:
+    - cron: "27 23 * * *"
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  id-token: write # npm provenance
+
+env:
+  PACKAGE_DIR: packages/react-native-live2d-skia
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          registry-url: https://registry.npmjs.org
+      - run: bun install --frozen-lockfile
+
+      - run: bunx biome ci .
+      - run: bun run typecheck
+      - run: bun run test
+      - run: bun run verify:package
+
+      - name: Plan the release
+        id: plan
+        run: |
+          export DATE="$(date -u +%Y%m%d)" SHA="$GITHUB_SHA"
+          bun "$PACKAGE_DIR/scripts/releasePlan.ts"
+        env:
+          TYPE: ${{ github.event_name == 'schedule' && 'nightly' || inputs.release-type }}
+          VERSION: ${{ inputs.version }}
+          NPM_TAG: ${{ inputs.npm-tag }}
+
+      - name: Summary
+        run: |
+          {
+            echo "### Release plan${DRY_RUN:+ (dry run)}"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| version | \`$VERSION\` |"
+            echo "| npm tag | \`$NPM_TAG\` |"
+            echo "| git tag | \`${GIT_TAG:-none}\` |"
+            echo "| commit the bump | $COMMIT_VERSION |"
+            echo "| GitHub Release | $GITHUB_RELEASE |"
+            [[ "$SKIP" == "true" ]] && echo "" && echo "Nothing to publish: this commit is already published as a nightly."
+          } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          DRY_RUN: ${{ (github.event_name != 'schedule' && inputs.dry-run) && 'true' || '' }}
+          VERSION: ${{ steps.plan.outputs.version }}
+          NPM_TAG: ${{ steps.plan.outputs.npmTag }}
+          GIT_TAG: ${{ steps.plan.outputs.gitTag }}
+          COMMIT_VERSION: ${{ steps.plan.outputs.commitVersion }}
+          GITHUB_RELEASE: ${{ steps.plan.outputs.githubRelease }}
+          SKIP: ${{ steps.plan.outputs.skip }}
+
+      # Committed for a stable release only.
+      - name: Set the version
+        if: steps.plan.outputs.skip != 'true'
+        working-directory: ${{ env.PACKAGE_DIR }}
+        run: npm version "$VERSION" --no-git-tag-version --allow-same-version
+        env:
+          VERSION: ${{ steps.plan.outputs.version }}
+
+      # prepack builds the plugin and the CLI.
+      - name: Publish to npm
+        if: steps.plan.outputs.skip != 'true'
+        working-directory: ${{ env.PACKAGE_DIR }}
+        run: |
+          if [[ "$DRY_RUN" == "true" ]]; then
+            npm publish --access public --tag "$NPM_TAG" --dry-run
+          else
+            npm publish --access public --provenance --tag "$NPM_TAG"
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TAG: ${{ steps.plan.outputs.npmTag }}
+          DRY_RUN: ${{ (github.event_name != 'schedule' && inputs.dry-run) && 'true' || 'false' }}
+
+      # After npm: a failed publish leaves no tag behind.
+      - name: Commit the version, tag and push
+        if: steps.plan.outputs.skip != 'true' && steps.plan.outputs.gitTag != '' && !(github.event_name != 'schedule' && inputs.dry-run)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [[ "$COMMIT_VERSION" == "true" ]]; then
+            bun install --lockfile-only || true
+            git add "$PACKAGE_DIR/package.json" bun.lock
+            # Nothing to commit when the version in package.json is already the one released.
+            if ! git diff --cached --quiet; then
+              git commit -m "chore: release $GIT_TAG"
+              git push origin "HEAD:$BRANCH"
+            fi
+          fi
+          git tag "$GIT_TAG"
+          git push origin "$GIT_TAG"
+        env:
+          BRANCH: ${{ github.ref_name }}
+          GIT_TAG: ${{ steps.plan.outputs.gitTag }}
+          COMMIT_VERSION: ${{ steps.plan.outputs.commitVersion }}
+
+      - name: Create the GitHub Release
+        if: steps.plan.outputs.skip != 'true' && steps.plan.outputs.githubRelease == 'true' && !(github.event_name != 'schedule' && inputs.dry-run)
+        run: |
+          # The notes cover the changes since the previous tag: the last stable one for a stable
+          # release, the nearest one of any kind for a candidate.
+          if [[ "$PRERELEASE" == "true" ]]; then
+            previous="$(git describe --tags --abbrev=0 "$GIT_TAG^" 2>/dev/null || true)"
+          else
+            previous="$(git tag --merged "$GIT_TAG^" --list 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)"
+          fi
+          args=(--title "$GIT_TAG" --generate-notes --verify-tag)
+          [[ -n "$previous" ]] && args+=(--notes-start-tag "$previous")
+          [[ "$PRERELEASE" == "true" ]] && args+=(--prerelease)
+          [[ "$LATEST" == "true" ]] && args+=(--latest) || args+=(--latest=false)
+          [[ -n "$NOTES" ]] && args+=(--notes "$NOTES")
+          gh release create "$GIT_TAG" "${args[@]}"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GIT_TAG: ${{ steps.plan.outputs.gitTag }}
+          PRERELEASE: ${{ steps.plan.outputs.prerelease }}
+          LATEST: ${{ steps.plan.outputs.latest }}
+          NOTES: ${{ inputs.notes }}
