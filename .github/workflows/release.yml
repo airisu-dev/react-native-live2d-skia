@@ -83,7 +83,10 @@ jobs:
             echo "| git tag | \`${GIT_TAG:-none}\` |"
             echo "| commit the bump | $COMMIT_VERSION |"
             echo "| GitHub Release | $GITHUB_RELEASE |"
-            [[ "$SKIP" == "true" ]] && echo "" && echo "Nothing to publish: this commit is already published as a nightly."
+            if [[ "$SKIP" == "true" ]]; then
+              echo ""
+              echo "Nothing to publish: this commit is already published as a nightly."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
         env:
           DRY_RUN: ${{ (github.event_name != 'schedule' && inputs.dry-run) && 'true' || '' }}
