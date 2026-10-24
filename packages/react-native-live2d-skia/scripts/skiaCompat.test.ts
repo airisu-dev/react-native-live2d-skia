@@ -120,13 +120,21 @@ describe('clangArgs', () => {
     skiaDir: '/skia',
     reactNative: '/rn',
     source: '/repo/lib/cpp/drawing/SkiaDrawer.cpp',
+    output: '/out/SkiaDrawer.o',
     exists: () => true,
   }
 
-  test('compiles for Android, syntax only, with the Cubism version the code requires', () => {
+  test('compiles an object for Android, warning only about deprecations, with the Cubism version the code requires', () => {
     const args = clangArgs({ ...base, flavor: 'graphite' })
     expect(args).toContain('--target=aarch64-linux-android24')
-    expect(args).toContain('-fsyntax-only')
+    expect(args.slice(args.indexOf('-c'), args.indexOf('-c') + 3)).toEqual([
+      '-c',
+      '-o',
+      '/out/SkiaDrawer.o',
+    ])
+    expect(args).toContain('-Wno-everything')
+    expect(args).toContain('-Wdeprecated-declarations')
+    expect(args).not.toContain('-fsyntax-only')
     expect(args).toContain('-DLIVE2D_SKIA=1')
     expect(args).toContain('-DLIVE2D_SKIA_CUBISM_SDK=50500')
     expect(args.at(-1)).toBe(base.source)
