@@ -4,6 +4,7 @@
 //   native        cpp/drawing/SkiaDrawer.cpp and MeshCache.cpp compile against its headers (--native)
 //   bindings      the Skia functions those files need, by mangled name (so the exact overload), are
 //                 the ones in scripts/skia-bindings.json: a change can still compile (--native)
+//   link          each of those functions is defined in the release's prebuilt libskia.a (--native)
 //   deprecations  nothing our native code calls is marked deprecated by Skia (--native)
 //
 //   bun scripts/skiaCompat.ts [--native] [--only react-native-skia@3.8.0,...] [--out results.json]
@@ -17,10 +18,14 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 import {
   bindingSymbols,
+  definedSymbols,
   deprecationsOf,
   describeDrift,
   diffBindings,
   hasDrifted,
+  LIB_ARCHIVE,
+  libPackageOf,
+  missingFromLib,
 } from './skiaNative'
 
 export type SkiaPackage = 'react-native-skia' | '@shopify/react-native-skia'
@@ -39,6 +44,7 @@ export interface VersionResult {
   native?: CheckResult
   bindings?: CheckResult
   deprecations?: CheckResult
+  link?: CheckResult
 }
 
 /** The checks that make a version incompatible. A deprecation is a warning: it only opens an issue. */
@@ -47,6 +53,7 @@ export function failedChecks(r: VersionResult): string[] {
     ['types', r.types],
     ['native', r.native],
     ['bindings', r.bindings],
+    ['link', r.link],
   ]
   return checks.filter(([, c]) => c && !c.ok).map(([name]) => name)
 }
@@ -371,20 +378,62 @@ export function checkBindings(
   return { ok: !hasDrifted(drift), output: hasDrifted(drift) ? describeDrift(drift) : '' }
 }
 
+/**
+ * Every Skia function our code needs is defined in that release's prebuilt libskia.a (arm64): a
+ * header can declare a function the library no longer has, and the app would fail to link.
+ */
+function checkLink(skiaDir: string, symbols: string[], dir: string, nm: string): CheckResult {
+  const lib = libPackageOf(
+    JSON.parse(fs.readFileSync(path.join(skiaDir, 'package.json'), 'utf8')) as {
+      dependencies?: Record<string, string>
+    },
+  )
+  if (!lib) return { ok: false, output: 'package.json names no prebuilt Skia library package' }
+  const libDir = path.join(dir, 'lib')
+  fs.mkdirSync(libDir, { recursive: true })
+  const pack = run('npm', [
+    'pack',
+    `${lib.name}@${lib.version}`,
+    '--silent',
+    '--pack-destination',
+    libDir,
+  ])
+  if (pack.code !== 0)
+    return {
+      ok: false,
+      output: `npm pack ${lib.name}@${lib.version} failed: ${trimOutput(pack.output, 5)}`,
+    }
+  const tgz = pack.stdout.trim().split('\n').pop()!
+  // Only the arm64 archive; relative paths, as in fetchPackage.
+  const tar = run('tar', ['-xzf', tgz, LIB_ARCHIVE], libDir)
+  if (tar.code !== 0)
+    return { ok: false, output: `couldn't unpack ${tgz}: ${trimOutput(tar.output, 5)}` }
+  const listed = run(nm, ['--defined-only', '--demangle', posix(path.join(libDir, LIB_ARCHIVE))])
+  if (listed.code !== 0)
+    throw new Error(`llvm-nm failed on ${lib.name}: ${trimOutput(listed.output, 5)}`)
+  const missing = missingFromLib(symbols, definedSymbols(listed.stdout))
+  return {
+    ok: missing.length === 0,
+    output: missing.map((s) => `not in ${lib.name}@${lib.version}: ${s}`).join('\n'),
+  }
+}
+
 function summaryTable(results: VersionResult[], native: boolean): string {
   const mark = (c?: CheckResult, warn = false) =>
     c === undefined ? '-' : c.ok ? 'ok' : warn ? 'warning' : '**FAIL**'
   const rows = results.map(
     (r) =>
       `| ${r.pkg} | ${r.version} | ${mark(r.types)} |${
-        native ? ` ${mark(r.native)} | ${mark(r.bindings)} | ${mark(r.deprecations, true)} |` : ''
+        native
+          ? ` ${mark(r.native)} | ${mark(r.bindings)} | ${mark(r.link)} | ${mark(r.deprecations, true)} |`
+          : ''
       }`,
   )
   return [
     '### Skia compatibility',
     '',
-    `| package | version | types |${native ? ' native | bindings | deprecations |' : ''}`,
-    `|---|---|---|${native ? '---|---|---|' : ''}`,
+    `| package | version | types |${native ? ' native | bindings | link | deprecations |' : ''}`,
+    `|---|---|---|${native ? '---|---|---|---|' : ''}`,
     ...rows,
     '',
   ].join('\n')
@@ -477,7 +526,11 @@ function main() {
       const checked = checkNative(pkg, skiaDir, packageRoot, clang, dir)
       result.native = checked.native
       result.deprecations = checked.deprecations
-      if (checked.symbols) result.bindings = checkBindings(pkg, checked.symbols, baseline)
+      if (checked.symbols) {
+        result.bindings = checkBindings(pkg, checked.symbols, baseline)
+        const nm = path.join(path.dirname(clang), `llvm-nm${path.extname(clang)}`)
+        result.link = checkLink(skiaDir, checked.symbols, dir, nm)
+      }
     }
     results.push(result)
     const failures = failedChecks(result)

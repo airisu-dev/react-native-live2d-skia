@@ -16,7 +16,7 @@ export const LABEL = 'skia-compat'
 /** New issues per run: a Skia release that breaks everything is one issue, not a flood. */
 export const MAX_NEW_ISSUES = 3
 
-export type CheckName = 'types' | 'native' | 'bindings' | 'deprecations'
+export type CheckName = 'types' | 'native' | 'bindings' | 'link' | 'deprecations'
 
 export interface Failure {
   pkg: string
@@ -43,7 +43,7 @@ export function splitErrors(output: string, check: CheckName = 'native'): string
   const text = output.trim()
   if (!text) return []
   // A binding change or a deprecation is one finding, not a list of independent errors.
-  if (check === 'bindings' || check === 'deprecations') return [text]
+  if (check === 'bindings' || check === 'link' || check === 'deprecations') return [text]
   if (/^check\.ts\(/m.test(text)) {
     return text
       .split(/\n(?=check\.ts\()/)
@@ -63,6 +63,7 @@ export function failuresOf(results: VersionResult[]): Failure[] {
       ['types', r.types],
       ['native', r.native],
       ['bindings', r.bindings],
+      ['link', r.link],
       ['deprecations', r.deprecations],
     ]
     for (const [check, result] of checks) {
@@ -132,6 +133,7 @@ export function issueBody(group: Group, runUrl: string | null): string {
       '`cpp/drawing/SkiaDrawer.cpp` or `MeshCache.cpp` no longer compiles against its headers.',
     bindings:
       'The Skia functions `SkiaDrawer.cpp` and `MeshCache.cpp` bind to differ from `scripts/skia-bindings.json`. It still compiles, but a call may now resolve to another overload with other behavior. If the change is harmless, refresh the baseline with `--native --update-baseline`.',
+    link: "A Skia function the native code needs is missing from the release's prebuilt `libskia.a` (arm64): the headers declare it, but an app would fail to link.",
     deprecations:
       'Skia marked something our native drawing code calls as deprecated. It still works; replace it before Skia removes it.',
   }
