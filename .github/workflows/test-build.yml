@@ -23,6 +23,9 @@ concurrency:
   group: test-build-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  ANDROID_CMAKE_VERSION: 3.22.1
+
 jobs:
   # Fetch the SDK once so the matrix legs do not all download it on a cold cache.
   sdk:
@@ -83,8 +86,8 @@ jobs:
         with:
           path: |
             /usr/local/lib/android/sdk/ndk/${{ steps.ndk.outputs.version }}
-            /usr/local/lib/android/sdk/cmake/3.22.1
-          key: android-ndk-${{ steps.ndk.outputs.version }}-${{ hashFiles('node_modules/react-native/gradle/libs.versions.toml') }}
+            /usr/local/lib/android/sdk/cmake/${{ env.ANDROID_CMAKE_VERSION }}
+          key: android-ndk-${{ steps.ndk.outputs.version }}-cmake-${{ env.ANDROID_CMAKE_VERSION }}-${{ hashFiles('node_modules/react-native/gradle/libs.versions.toml') }}
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Prebuild
