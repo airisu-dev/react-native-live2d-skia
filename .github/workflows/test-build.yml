@@ -82,6 +82,10 @@ jobs:
       - name: Prebuild
         working-directory: apps/${{ matrix.app }}
         run: bunx expo prebuild --platform android --no-install
+      - uses: actions/cache@v4
+        with:
+          path: ~/.gradle/wrapper/dists
+          key: gradle-wrapper-${{ hashFiles(format('apps/{0}/android/gradle/wrapper/gradle-wrapper.properties', matrix.app)) }}
       - name: Build debug APK
         working-directory: apps/${{ matrix.app }}/android
         run: ./gradlew :app:assembleDebug -PreactNativeArchitectures=arm64-v8a
