@@ -1,0 +1,30 @@
+{
+  "react-native-skia": [
+    "SkCanvas::drawVertices(SkVertices const*, SkBlendMode, SkPaint const&)",
+    "SkCanvas::restore()",
+    "SkCanvas::saveLayer(SkRect const*, SkPaint const*)",
+    "SkLog(SkLogPriority, char const*, ...)",
+    "SkPaint::SkPaint()",
+    "SkPaint::setAlphaf(float)",
+    "SkPaint::setBlendMode(SkBlendMode)",
+    "SkPaint::setShader(sk_sp<SkShader>)",
+    "SkPaint::~SkPaint()",
+    "SkVertices::MakeCopy(SkVertices::VertexMode, int, SkPoint const*, SkPoint const*, unsigned int const*, int, unsigned short const*)",
+    "SkVertices::operator delete(void*)",
+    "sk_abort_no_print()"
+  ],
+  "@shopify/react-native-skia": [
+    "SkCanvas::drawVertices(SkVertices const*, SkBlendMode, SkPaint const&)",
+    "SkCanvas::restore()",
+    "SkCanvas::saveLayer(SkRect const*, SkPaint const*)",
+    "SkLog(SkLogPriority, char const*, ...)",
+    "SkPaint::SkPaint()",
+    "SkPaint::setAlphaf(float)",
+    "SkPaint::setBlendMode(SkBlendMode)",
+    "SkPaint::setShader(sk_sp<SkShader>)",
+    "SkPaint::~SkPaint()",
+    "SkVertices::MakeCopy(SkVertices::VertexMode, int, SkPoint const*, SkPoint const*, unsigned int const*, int, unsigned short const*)",
+    "SkVertices::operator delete(void*)",
+    "sk_abort_no_print()"
+  ]
+}

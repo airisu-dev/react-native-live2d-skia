@@ -1,16 +1,32 @@
 // Checks every stable react-native-skia / @shopify/react-native-skia version this package supports
 // (the peerDependencies ranges, up to the newest release) against the Skia API it uses:
-//   types   the real package's types satisfy src/rendering/skiaTypes.ts (what the JS needs)
-//   native  cpp/drawing/SkiaDrawer.cpp and MeshCache.cpp compile against its headers (--native)
+//   types         the real package's types satisfy src/rendering/skiaTypes.ts (what the JS needs)
+//   native        cpp/drawing/SkiaDrawer.cpp and MeshCache.cpp compile against its headers (--native)
+//   bindings      the Skia functions those files need, by mangled name (so the exact overload), are
+//                 the ones in scripts/skia-bindings.json: a change can still compile (--native)
+//   link          each of those functions is defined in the release's prebuilt libskia.a (--native)
+//   deprecations  nothing our native code calls is marked deprecated by Skia (--native)
 //
 //   bun scripts/skiaCompat.ts [--native] [--only react-native-skia@3.8.0,...] [--out results.json]
-//                             [--fail-on-incompatible]
+//                             [--fail-on-incompatible] [--update-baseline] [--skip-types]
+// --skip-types leaves the type check to a parallel run (the workflow runs the two as separate jobs).
 // Failed checks are results, not errors: the exit code is 1 only when the run itself broke, or with
-// --fail-on-incompatible when any version failed.
+// --fail-on-incompatible when a check other than deprecations failed.
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
+import {
+  bindingSymbols,
+  definedSymbols,
+  deprecationsOf,
+  describeDrift,
+  diffBindings,
+  hasDrifted,
+  LIB_ARCHIVE,
+  libPackageOf,
+  missingFromLib,
+} from './skiaNative'
 
 export type SkiaPackage = 'react-native-skia' | '@shopify/react-native-skia'
 export const PACKAGES: SkiaPackage[] = ['react-native-skia', '@shopify/react-native-skia']
@@ -23,8 +39,23 @@ export interface CheckResult {
 export interface VersionResult {
   pkg: SkiaPackage
   version: string
-  types: CheckResult
+  /** Not set with --skip-types. */
+  types?: CheckResult
   native?: CheckResult
+  bindings?: CheckResult
+  deprecations?: CheckResult
+  link?: CheckResult
+}
+
+/** The checks that make a version incompatible. A deprecation is a warning: it only opens an issue. */
+export function failedChecks(r: VersionResult): string[] {
+  const checks: [string, CheckResult | undefined][] = [
+    ['types', r.types],
+    ['native', r.native],
+    ['bindings', r.bindings],
+    ['link', r.link],
+  ]
+  return checks.filter(([, c]) => c && !c.ok).map(([name]) => name)
 }
 
 const STABLE = /^\d+\.\d+\.\d+$/
@@ -97,11 +128,16 @@ export interface ClangInput {
   reactNative: string
   flavor: 'graphite' | 'ganesh'
   source: string
+  /** The object file to write: it lists the Skia functions the code needs. */
+  output: string
   /** Include directories that exist in this Skia version. */
   exists: (dir: string) => boolean
 }
 
-/** The compiler arguments, from android/CMakeLists.txt: the same includes and defines, syntax only. */
+/**
+ * The compiler arguments, from android/CMakeLists.txt: the same includes and defines, compiled to an
+ * object file (not linked). All warnings are off except the deprecated ones.
+ */
 export function clangArgs(input: ClangInput): string[] {
   const { lib, cubismSdk, skiaDir: s, reactNative: rn, flavor } = input
   const includes = [
@@ -142,8 +178,11 @@ export function clangArgs(input: ClangInput): string[] {
   return [
     '--target=aarch64-linux-android24',
     '-std=c++20',
-    '-fsyntax-only',
-    '-w',
+    '-c',
+    '-o',
+    input.output,
+    '-Wno-everything',
+    '-Wdeprecated-declarations',
     ...includes.map((dir) => `-I${dir}`),
     ...defines.map((define) => `-D${define}`),
     input.source,
@@ -252,17 +291,32 @@ function checkTypes(pkg: SkiaPackage, dir: string, packageRoot: string): CheckRe
   }
 }
 
+const UNITS = ['SkiaDrawer', 'MeshCache']
+
+interface NativeResult {
+  native: CheckResult
+  /** Not set when the code did not compile. */
+  deprecations?: CheckResult
+  /** The Skia functions the two files need. Not set when the code did not compile. */
+  symbols?: string[]
+}
+
 function checkNative(
   pkg: SkiaPackage,
   skiaDir: string,
   packageRoot: string,
   clang: string,
-): CheckResult {
+  dir: string,
+): NativeResult {
   const repoRoot = path.join(packageRoot, '..', '..')
   const cubismSdk =
     process.env.CUBISM_SDK_DIR ?? path.join(repoRoot, 'apps/app/vendor/CubismSdkForNative')
+  const nm = path.join(path.dirname(clang), `llvm-nm${path.extname(clang)}`)
   const failures: string[] = []
-  for (const unit of ['SkiaDrawer', 'MeshCache']) {
+  const deprecations: string[] = []
+  const symbols = new Set<string>()
+  for (const unit of UNITS) {
+    const object = path.join(dir, `${unit}.o`)
     const args = clangArgs({
       lib: posix(packageRoot),
       cubismSdk: posix(cubismSdk),
@@ -270,7 +324,8 @@ function checkNative(
       reactNative: posix(path.join(repoRoot, 'node_modules', 'react-native')),
       flavor: nativeFlavor(pkg),
       source: posix(path.join(packageRoot, 'cpp', 'drawing', `${unit}.cpp`)),
-      exists: (dir) => fs.existsSync(dir),
+      output: posix(object),
+      exists: (include) => fs.existsSync(include),
     })
     const { code, output } = run(clang, args)
     if (code !== 0) {
@@ -279,41 +334,155 @@ function checkNative(
         .filter((l) => /error|fatal/.test(l))
         .slice(0, 6)
       failures.push(`${unit}.cpp\n${errors.join('\n')}`)
+      continue
+    }
+    deprecations.push(...deprecationsOf(output))
+    const listed = run(nm, ['--undefined-only', '--demangle', posix(object)])
+    if (listed.code !== 0)
+      throw new Error(`llvm-nm failed on ${unit}.o: ${trimOutput(listed.output, 5)}`)
+    for (const symbol of bindingSymbols(listed.stdout)) symbols.add(symbol)
+  }
+  if (failures.length > 0) return { native: { ok: false, output: failures.join('\n\n') } }
+  const found = [...new Set(deprecations)].sort()
+  return {
+    native: { ok: true, output: '' },
+    deprecations: { ok: found.length === 0, output: found.join('\n') },
+    symbols: [...symbols].sort(),
+  }
+}
+
+export type Baseline = Partial<Record<SkiaPackage, string[]>>
+
+const baselinePath = (packageRoot: string) =>
+  path.join(packageRoot, 'scripts', 'skia-bindings.json')
+
+function loadBaseline(packageRoot: string): Baseline {
+  const file = baselinePath(packageRoot)
+  return fs.existsSync(file) ? (JSON.parse(fs.readFileSync(file, 'utf8')) as Baseline) : {}
+}
+
+/** The Skia functions our native code needs, now, against the baseline: any difference is reported. */
+export function checkBindings(
+  pkg: SkiaPackage,
+  symbols: string[],
+  baseline: Baseline,
+): CheckResult {
+  const expected = baseline[pkg]
+  if (!expected) {
+    return {
+      ok: false,
+      output: `scripts/skia-bindings.json has no baseline for ${pkg}: run bun scripts/skiaCompat.ts --native --update-baseline`,
     }
   }
-  return { ok: failures.length === 0, output: failures.join('\n\n') }
+  const drift = diffBindings(expected, symbols)
+  return { ok: !hasDrifted(drift), output: hasDrifted(drift) ? describeDrift(drift) : '' }
+}
+
+/**
+ * Every Skia function our code needs is defined in that release's prebuilt libskia.a (arm64): a
+ * header can declare a function the library no longer has, and the app would fail to link.
+ */
+function checkLink(skiaDir: string, symbols: string[], dir: string, nm: string): CheckResult {
+  const lib = libPackageOf(
+    JSON.parse(fs.readFileSync(path.join(skiaDir, 'package.json'), 'utf8')) as {
+      dependencies?: Record<string, string>
+    },
+  )
+  if (!lib) return { ok: false, output: 'package.json names no prebuilt Skia library package' }
+  const libDir = path.join(dir, 'lib')
+  fs.mkdirSync(libDir, { recursive: true })
+  const pack = run('npm', [
+    'pack',
+    `${lib.name}@${lib.version}`,
+    '--silent',
+    '--pack-destination',
+    libDir,
+  ])
+  if (pack.code !== 0)
+    return {
+      ok: false,
+      output: `npm pack ${lib.name}@${lib.version} failed: ${trimOutput(pack.output, 5)}`,
+    }
+  const tgz = pack.stdout.trim().split('\n').pop()!
+  // Only the arm64 archive; relative paths, as in fetchPackage.
+  const tar = run('tar', ['-xzf', tgz, LIB_ARCHIVE], libDir)
+  if (tar.code !== 0)
+    return { ok: false, output: `couldn't unpack ${tgz}: ${trimOutput(tar.output, 5)}` }
+  const listed = run(nm, ['--defined-only', '--demangle', posix(path.join(libDir, LIB_ARCHIVE))])
+  if (listed.code !== 0)
+    throw new Error(`llvm-nm failed on ${lib.name}: ${trimOutput(listed.output, 5)}`)
+  const missing = missingFromLib(symbols, definedSymbols(listed.stdout))
+  return {
+    ok: missing.length === 0,
+    output: missing.map((s) => `not in ${lib.name}@${lib.version}: ${s}`).join('\n'),
+  }
 }
 
 function summaryTable(results: VersionResult[], native: boolean): string {
-  const mark = (c?: CheckResult) => (c === undefined ? '-' : c.ok ? 'ok' : '**FAIL**')
+  const mark = (c?: CheckResult, warn = false) =>
+    c === undefined ? '-' : c.ok ? 'ok' : warn ? 'warning' : '**FAIL**'
   const rows = results.map(
-    (r) => `| ${r.pkg} | ${r.version} | ${mark(r.types)} |${native ? ` ${mark(r.native)} |` : ''}`,
+    (r) =>
+      `| ${r.pkg} | ${r.version} | ${mark(r.types)} |${
+        native
+          ? ` ${mark(r.native)} | ${mark(r.bindings)} | ${mark(r.link)} | ${mark(r.deprecations, true)} |`
+          : ''
+      }`,
   )
   return [
     '### Skia compatibility',
     '',
-    `| package | version | types |${native ? ' native |' : ''}`,
-    `|---|---|---|${native ? '---|' : ''}`,
+    `| package | version | types |${native ? ' native | bindings | link | deprecations |' : ''}`,
+    `|---|---|---|${native ? '---|---|---|---|' : ''}`,
     ...rows,
     '',
   ].join('\n')
 }
 
+/** Records what our native code binds to in the oldest supported release of each package. */
+function updateBaseline(
+  packageRoot: string,
+  workRoot: string,
+  targets: { pkg: SkiaPackage; version: string }[],
+  clang: string,
+) {
+  const baseline: Baseline = loadBaseline(packageRoot)
+  for (const { pkg, version } of targets) {
+    const dir = path.join(workRoot, `${pkg.replace('/', '__')}@${version}`)
+    const result = checkNative(pkg, fetchPackage(pkg, version, dir), packageRoot, clang, dir)
+    fs.rmSync(dir, { recursive: true, force: true })
+    if (!result.symbols)
+      throw new Error(`${pkg}@${version} doesn't compile:\n${result.native.output}`)
+    baseline[pkg] = result.symbols
+    console.log(`${pkg}@${version}: ${result.symbols.length} Skia functions`)
+  }
+  fs.writeFileSync(baselinePath(packageRoot), `${JSON.stringify(baseline, null, 2)}\n`)
+  console.log(`Wrote ${baselinePath(packageRoot)}`)
+}
+
 function main() {
   const args = process.argv.slice(2)
   const flag = (name: string) => args.includes(name)
-  const value = (name: string) => args[args.indexOf(name) + 1]
+  const value = (name: string) => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined)
   const packageRoot = path.join(import.meta.dir, '..')
   const manifest = JSON.parse(fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8')) as {
     peerDependencies: Record<string, string>
   }
-  const native = flag('--native')
+  const updateBaselineOnly = flag('--update-baseline')
+  const native = flag('--native') || updateBaselineOnly
   const workRoot = path.join(packageRoot, '.skia-compat')
   const out = value('--out') ?? path.join(workRoot, 'results.json')
 
   let targets: { pkg: SkiaPackage; version: string }[]
   if (flag('--only')) {
     targets = value('--only')!.split(',').map(parseTarget)
+  } else if (updateBaselineOnly) {
+    // The baseline is what the oldest supported release of each package needs.
+    targets = PACKAGES.map((pkg) => {
+      const range = manifest.peerDependencies[pkg]
+      if (!range) throw new Error(`package.json has no peerDependency on ${pkg}`)
+      return { pkg, version: minVersionOf(range) }
+    })
   } else {
     targets = PACKAGES.flatMap((pkg) => {
       const range = manifest.peerDependencies[pkg]
@@ -337,19 +506,36 @@ function main() {
     }
   }
 
+  if (updateBaselineOnly) {
+    updateBaseline(packageRoot, workRoot, targets, clang!)
+    return
+  }
+
   console.log(
-    `Checking ${targets.length} Skia versions${native ? ' (types + native)' : ' (types)'}`,
+    `Checking ${targets.length} Skia versions (${[flag('--skip-types') ? '' : 'types', native ? 'native' : ''].filter(Boolean).join(' + ')})`,
   )
   fs.mkdirSync(path.dirname(out), { recursive: true })
+  const baseline = loadBaseline(packageRoot)
   const results: VersionResult[] = []
   for (const { pkg, version } of targets) {
     const dir = path.join(workRoot, `${pkg.replace('/', '__')}@${version}`)
     const skiaDir = fetchPackage(pkg, version, dir)
-    const result: VersionResult = { pkg, version, types: checkTypes(pkg, dir, packageRoot) }
-    if (native && clang) result.native = checkNative(pkg, skiaDir, packageRoot, clang)
+    const result: VersionResult = { pkg, version }
+    if (!flag('--skip-types')) result.types = checkTypes(pkg, dir, packageRoot)
+    if (native && clang) {
+      const checked = checkNative(pkg, skiaDir, packageRoot, clang, dir)
+      result.native = checked.native
+      result.deprecations = checked.deprecations
+      if (checked.symbols) {
+        result.bindings = checkBindings(pkg, checked.symbols, baseline)
+        const nm = path.join(path.dirname(clang), `llvm-nm${path.extname(clang)}`)
+        result.link = checkLink(skiaDir, checked.symbols, dir, nm)
+      }
+    }
     results.push(result)
-    const flags = [result.types, result.native].filter((c): c is CheckResult => !!c)
-    console.log(`${flags.every((c) => c.ok) ? 'ok  ' : 'FAIL'} ${pkg}@${version}`)
+    const failures = failedChecks(result)
+    const warnings = result.deprecations && !result.deprecations.ok ? ' (deprecated APIs)' : ''
+    console.log(`${failures.length === 0 ? 'ok  ' : 'FAIL'} ${pkg}@${version}${warnings}`)
     fs.rmSync(dir, { recursive: true, force: true })
   }
   fs.writeFileSync(out, `${JSON.stringify(results, null, 2)}\n`)
@@ -357,7 +543,7 @@ function main() {
   console.log(`\n${table}`)
   if (process.env.GITHUB_STEP_SUMMARY)
     fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${table}\n`)
-  const failed = results.filter((r) => !r.types.ok || (r.native && !r.native.ok))
+  const failed = results.filter((r) => failedChecks(r).length > 0)
   console.log(`${results.length - failed.length} compatible, ${failed.length} not. Results: ${out}`)
   if (flag('--fail-on-incompatible') && failed.length > 0) process.exit(1)
 }

@@ -2,7 +2,7 @@
 // the same one: an issue carries a hidden marker made of the package and a fingerprint of the
 // error, and a marker already in any issue (open or closed) is skipped.
 //
-//   bun scripts/skiaCompatReport.ts results.json [--dry-run]
+//   bun scripts/skiaCompatReport.ts results.json [more-results.json ...] [--dry-run]
 // Uses the gh CLI: GH_TOKEN, and GITHUB_REPOSITORY and GITHUB_RUN_ID for the link to the run.
 
 import { spawnSync } from 'node:child_process'
@@ -16,7 +16,7 @@ export const LABEL = 'skia-compat'
 /** New issues per run: a Skia release that breaks everything is one issue, not a flood. */
 export const MAX_NEW_ISSUES = 3
 
-export type CheckName = 'types' | 'native'
+export type CheckName = 'types' | 'native' | 'bindings' | 'link' | 'deprecations'
 
 export interface Failure {
   pkg: string
@@ -39,9 +39,11 @@ export interface Group {
  * issue with only its own text. tsc errors start at `check.ts(`; native output is `<unit>.cpp`
  * followed by its error lines.
  */
-export function splitErrors(output: string): string[] {
+export function splitErrors(output: string, check: CheckName = 'native'): string[] {
   const text = output.trim()
   if (!text) return []
+  // A binding change or a deprecation is one finding, not a list of independent errors.
+  if (check === 'bindings' || check === 'link' || check === 'deprecations') return [text]
   if (/^check\.ts\(/m.test(text)) {
     return text
       .split(/\n(?=check\.ts\()/)
@@ -60,10 +62,13 @@ export function failuresOf(results: VersionResult[]): Failure[] {
     const checks: [CheckName, CheckResult | undefined][] = [
       ['types', r.types],
       ['native', r.native],
+      ['bindings', r.bindings],
+      ['link', r.link],
+      ['deprecations', r.deprecations],
     ]
     for (const [check, result] of checks) {
       if (!result || result.ok) continue
-      const errors = splitErrors(result.output)
+      const errors = splitErrors(result.output, check)
       for (const output of errors.length > 0 ? errors : [result.output]) {
         failures.push({ pkg: r.pkg, version: r.version, check, output })
       }
@@ -126,6 +131,11 @@ export function issueBody(group: Group, runUrl: string | null): string {
       "The package's types no longer satisfy `src/rendering/skiaTypes.ts`, the part of Skia this package uses.",
     native:
       '`cpp/drawing/SkiaDrawer.cpp` or `MeshCache.cpp` no longer compiles against its headers.',
+    bindings:
+      'The Skia functions `SkiaDrawer.cpp` and `MeshCache.cpp` bind to differ from `scripts/skia-bindings.json`. It still compiles, but a call may now resolve to another overload with other behavior. If the change is harmless, refresh the baseline with `--native --update-baseline`.',
+    link: "A Skia function the native code needs is missing from the release's prebuilt `libskia.a` (arm64): the headers declare it, but an app would fail to link.",
+    deprecations:
+      'Skia marked something our native drawing code calls as deprecated. It still works; replace it before Skia removes it.',
   }
   const output = group.output.length > 3000 ? `${group.output.slice(0, 3000)}\n...` : group.output
   return [
@@ -137,7 +147,7 @@ export function issueBody(group: Group, runUrl: string | null): string {
     output,
     '```',
     '',
-    `Reproduce: \`bun packages/react-native-live2d-skia/scripts/skiaCompat.ts --only ${group.pkg}@${group.versions[0]}${group.check === 'native' ? ' --native' : ''}\``,
+    `Reproduce: \`bun packages/react-native-live2d-skia/scripts/skiaCompat.ts --only ${group.pkg}@${group.versions[0]}${group.check === 'types' ? '' : ' --native'}\``,
     ...(runUrl ? ['', `Found by ${runUrl}`] : []),
     '',
     'This issue is opened once per failure. Later versions that fail in the same way are not reported again.',
@@ -165,13 +175,17 @@ function gh(args: string[]) {
 }
 
 function main() {
-  const [file] = process.argv.slice(2)
-  if (!file) throw new Error('usage: skiaCompatReport.ts <results.json> [--dry-run]')
+  const files = process.argv.slice(2).filter((arg) => !arg.startsWith('--'))
+  if (files.length === 0)
+    throw new Error('usage: skiaCompatReport.ts <results.json>... [--dry-run]')
   const dryRun = process.argv.includes('--dry-run')
-  const results = JSON.parse(fs.readFileSync(file, 'utf8')) as VersionResult[]
+  // One file per parallel job (types, native): each result holds only the checks that job ran.
+  const results = files.flatMap(
+    (file) => JSON.parse(fs.readFileSync(file, 'utf8')) as VersionResult[],
+  )
   const groups = groupFailures(failuresOf(results))
   if (groups.length === 0) {
-    console.log(`All ${results.length} Skia versions are compatible: nothing to report.`)
+    console.log('All Skia versions are compatible: nothing to report.')
     return
   }
 
