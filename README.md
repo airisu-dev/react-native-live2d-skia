@@ -52,7 +52,6 @@ The model's JSON files (`model3.json`, motions, physics, expressions) and textur
 
 The package doesn't include Live2D's Cubism SDK: its Core is proprietary, and each app downloads it from Live2D, accepting
 [Live2D's license terms](https://www.live2d.com/eula/live2d-proprietary-software-license-agreement_en.html).
-
 1. Download it (it's checked against a SHA-256):
 
    ```bash
@@ -109,7 +108,6 @@ const { model, error, retry } = useLive2DModel(
 ```
 
 A string is the URL of a `model3.json`. The files it lists are resolved relative to it, and spaces in file names are escaped.
-
 - Every file (JSON, moc, textures) is fetched in parallel with `expo/fetch`. The only caching is the platform's HTTP cache, so a persistent offline copy is up to the app.
 - Motion sounds are ignored.
 - A failed fetch ends up in `error` as `Live2D: failed to fetch <url> (<status>)`, and network errors (e.g. offline) come through the same way. `retry()` tries again. URLs in error messages never include their query, so tokens don't leak into the UI or logs.
@@ -190,47 +188,46 @@ Methods can be called from the JS thread while the model animates on its backgro
 
 `source` is a `require.context` of the model's folder, a `Live2DModelSource`, or the URL of a `model3.json`. It returns:
 
-| Field       | Description                                                       |
-| ----------- | ----------------------------------------------------------------- |
-| `model`     | The loaded model, `null` while loading or after an error          |
-| `error`     | Why the last load failed (e.g. a network error for a URL source)  |
-| `loading`   | `true` while a load is in progress                                |
-| `retry()`   | Loads again                                                       |
+| Field     | Description                                                      |
+| --------- | ---------------------------------------------------------------- |
+| `model`   | The loaded model, `null` while loading or after an error         |
+| `error`   | Why the last load failed (e.g. a network error for a URL source) |
+| `loading` | `true` while a load is in progress                               |
+| `retry()` | Loads again                                                      |
 
-| Option       | Description                                                                                                                                                                        |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `headers`    | Sent with every request for a remote file                                                                                                                                          |
+| Option       | Description                                                                                                                                                                                                                                        |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `headers`    | Sent with every request for a remote file                                                                                                                                                                                                          |
 | `resolveUrl` | `(url, file) => string \| Promise<string>`: the URL to request for each file the `model3.json` lists. `url` is resolved next to it without a query, `file` is the path as listed. Replaces the default, which reuses the `model3.json` URL's query |
 
 ### `<Live2D />`
 
-| Prop                  | Description                                                                                                                                                                |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `model`               | `model` from `useLive2DModel` (renders nothing while `null`)                                                                                                               |
-| `x`, `y`              | Top-left position on the canvas. Default `0`                                                                                                                               |
-| `scale`               | Uniform scale of the model's native canvas size. Default `1`                                                                                                               |
-| `paused`              | Stops animating, keeps the current frame. Default `false`                                                                                                                  |
-| `maxFps`              | Caps the frame rate (e.g. `30` to save battery). Default: the display's refresh rate                                                                                       |
+| Prop                  | Description                                                                                                                                                                          |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `model`               | `model` from `useLive2DModel` (renders nothing while `null`)                                                                                                                         |
+| `x`, `y`              | Top-left position on the canvas. Default `0`                                                                                                                                         |
+| `scale`               | Uniform scale of the model's native canvas size. Default `1`                                                                                                                         |
+| `paused`              | Stops animating, keeps the current frame. Default `false`                                                                                                                            |
+| `maxFps`              | Caps the frame rate (e.g. `30` to save battery). Default: the display's refresh rate                                                                                                 |
 | `onFrameStats(stats)` | About once a second: `fps`, `targetFps`, per-frame times (`workMs`, `updateMs`, `drawablesMs`, `drawMs`, `meshMs`), `meshesBuilt`, `layers` (mask layers), `models` and `loopWorkMs` |
 
 ### `useLive2DGestures(targets, options?)`
 
 Returns one gesture for a `<GestureDetector>` around the `<Canvas>`. Gestures need a native view, so this can't be a prop of `<Live2D>`, which is drawn inside the canvas. List targets in drawing order.
-
 - A drag makes every model look at the finger.
 - A tap goes to the topmost model with a hit area under it.
 - A long press (350 ms) on a model's hit area picks it up, if it has `onMove`.
 
-| Target field      | Description                                                                                                                                                                                                                         |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `model`           | `model` from `useLive2DModel`                                                                                                                                                                                                       |
-| `x`, `y`, `scale` | Same as its `<Live2D>` props, to map touches to the model                                                                                                                                                                           |
-| `onHit(hitAreas)` | Called on a tap on its hit areas. Return `true` to skip the default: a random `Tap<Area>` motion (e.g. `TapBody`), else a random expression for `Head`, else a random `Tap` motion (models with one tap group)                      |
-| `onMove(x, y)`    | Makes it draggable. Called with its new top-left position as the finger moves, keeping the point where it was grabbed; the app moves it                                                                                            |
+| Target field      | Description                                                                                                                                                                                                    |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `model`           | `model` from `useLive2DModel`                                                                                                                                                                                  |
+| `x`, `y`, `scale` | Same as its `<Live2D>` props, to map touches to the model                                                                                                                                                      |
+| `onHit(hitAreas)` | Called on a tap on its hit areas. Return `true` to skip the default: a random `Tap<Area>` motion (e.g. `TapBody`), else a random expression for `Head`, else a random `Tap` motion (models with one tap group) |
+| `onMove(x, y)`    | Makes it draggable. Called with its new top-left position as the finger moves, keeping the point where it was grabbed; the app moves it                                                                        |
 
-| Option  | Description                                               |
-| ------- | --------------------------------------------------------- |
-| `focus` | Models follow the finger while it's down. Default `true`  |
+| Option  | Description                                              |
+| ------- | -------------------------------------------------------- |
+| `focus` | Models follow the finger while it's down. Default `true` |
 
 The gesture is built once; targets are read at touch time, so they can change on every render.
 
@@ -240,16 +237,16 @@ The same for one model: `options` is a target (without `model`) plus `focus`.
 
 ### `Live2DModel`
 
-| Member                                        | Description                                                                           |
-| --------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `motion(group, index?, priority?)`            | Plays a motion; `priority` is `'idle'`, `'normal'` or `'force'`. `false` if there is none or a higher priority one is playing |
-| `expression(name?)`                           | Fades to an expression, random without a name. `false` if there is none               |
-| `resetExpression()`                           | Removes the current expression                                                        |
-| `setParameter(id, value)` / `resetParameter(id)` | Holds a parameter over motions until reset                                         |
-| `focus(x, y)` / `resetFocus()`                | Looks at a point, easing / looks straight ahead                                       |
-| `hitTest(x, y)`                               | Names of the `model3.json` hit areas at a point                                       |
-| `motionGroups`, `expressionNames`             | What the model has                                                                    |
-| `width`, `height`                             | The model's native canvas size                                                        |
+| Member                                           | Description                                                                                                                   |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| `motion(group, index?, priority?)`               | Plays a motion; `priority` is `'idle'`, `'normal'` or `'force'`. `false` if there is none or a higher priority one is playing |
+| `expression(name?)`                              | Fades to an expression, random without a name. `false` if there is none                                                       |
+| `resetExpression()`                              | Removes the current expression                                                                                                |
+| `setParameter(id, value)` / `resetParameter(id)` | Holds a parameter over motions until reset                                                                                    |
+| `focus(x, y)` / `resetFocus()`                   | Looks at a point, easing / looks straight ahead                                                                               |
+| `hitTest(x, y)`                                  | Names of the `model3.json` hit areas at a point                                                                               |
+| `motionGroups`, `expressionNames`                | What the model has                                                                                                            |
+| `width`, `height`                                | The model's native canvas size                                                                                                |
 
 ## Troubleshooting
 
