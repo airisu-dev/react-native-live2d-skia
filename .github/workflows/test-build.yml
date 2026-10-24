@@ -136,8 +136,11 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: apps/${{ matrix.app }}/ios/Pods
-          key: pods-${{ matrix.app }}-${{ hashFiles(format('apps/{0}/ios/Podfile.lock', matrix.app)) }}
-          restore-keys: pods-${{ matrix.app }}-
+          key: pods-${{ matrix.app }}-${{ hashFiles('bun.lock', format('apps/{0}/app.json', matrix.app)) }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/ReactNative
+          key: react-native-prebuilt-${{ hashFiles('bun.lock') }}
       - name: Install pods
         working-directory: apps/${{ matrix.app }}/ios
         run: pod install
