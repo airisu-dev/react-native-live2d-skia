@@ -1,35 +1,64 @@
 name: Test Build
 
+# The `changes` job picks the platforms to build and lists why in the run summary; the rules are in
+# packages/react-native-live2d-skia/scripts/changedAreas.ts. A draft builds nothing until it is
+# ready for review, and the `native-build` label forces both platforms.
 on:
   pull_request:
     branches: [main]
-    paths:
-      - packages/react-native-live2d-skia/cpp/**
-      - packages/react-native-live2d-skia/android/**
-      - packages/react-native-live2d-skia/ios/**
-      - packages/react-native-live2d-skia/plugin/**
-      - packages/react-native-live2d-skia/src/specs/**
-      - packages/react-native-live2d-skia/nitro.json
-      - packages/react-native-live2d-skia/*.podspec
-      - packages/react-native-live2d-skia/package.json
-      - apps/*/app.json
-      - apps/*/package.json
-      - bun.lock
-      - scripts/fetch-cubism-sdk.sh
-      - .github/workflows/test-build.yml
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
   workflow_dispatch:
+    inputs:
+      android:
+        description: Build Android
+        type: boolean
+        default: true
+      ios:
+        description: Build iOS
+        type: boolean
+        default: true
 
 concurrency:
   group: test-build-${{ github.ref }}
-  cancel-in-progress: true
+  # A new push replaces the running builds; adding a label must not cancel them.
+  cancel-in-progress: ${{ github.event.action != 'labeled' }}
 
 env:
   ANDROID_CMAKE_VERSION: 3.22.1
 
 jobs:
+  changes:
+    name: changed native areas
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      android: ${{ steps.areas.outputs.android }}
+      ios: ${{ steps.areas.outputs.ios }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - id: areas
+        run: bun packages/react-native-live2d-skia/scripts/changedAreas.ts
+        env:
+          EVENT: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          LABEL: ${{ github.event.label.name }}
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          DRAFT: ${{ github.event.pull_request.draft }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          ANDROID: ${{ inputs.android }}
+          IOS: ${{ inputs.ios }}
+
   # Fetch the SDK once so the matrix legs do not all download it on a cold cache.
   sdk:
     name: fetch Cubism SDK
+    needs: changes
+    if: needs.changes.outputs.android == 'true' || needs.changes.outputs.ios == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -53,7 +82,8 @@ jobs:
     name: android (${{ matrix.app }})
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    needs: sdk
+    needs: [changes, sdk]
+    if: needs.changes.outputs.android == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -105,7 +135,8 @@ jobs:
     name: ios (${{ matrix.app }})
     runs-on: macos-26
     timeout-minutes: 90
-    needs: sdk
+    needs: [changes, sdk]
+    if: needs.changes.outputs.ios == 'true'
     strategy:
       fail-fast: false
       matrix:
