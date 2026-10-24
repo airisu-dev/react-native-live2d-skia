@@ -23,11 +23,37 @@ concurrency:
   group: test-build-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  ANDROID_CMAKE_VERSION: 3.22.1
+
 jobs:
+  # Fetch the SDK once so the matrix legs do not all download it on a cold cache.
+  sdk:
+    name: fetch Cubism SDK
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - id: cache
+        uses: actions/cache@v4
+        with:
+          path: apps/app/vendor/CubismSdkForNative-*.zip
+          key: cubism-sdk-${{ hashFiles('scripts/fetch-cubism-sdk.sh', 'packages/react-native-live2d-skia/package.json') }}
+      - if: steps.cache.outputs.cache-hit != 'true'
+        run: bash scripts/fetch-cubism-sdk.sh
+
   android:
-    name: test (${{ matrix.app }})
+    name: android (${{ matrix.app }})
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    needs: sdk
     strategy:
       fail-fast: false
       matrix:
@@ -42,12 +68,11 @@ jobs:
           bun-version: latest
       - run: bun install --frozen-lockfile
 
-      # Cubism SDK and sample models are proprietary and gitignored. Both apps use
-      # apps/app/vendor, so one fetch serves the whole matrix.
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
         with:
           path: apps/app/vendor/CubismSdkForNative-*.zip
           key: cubism-sdk-${{ hashFiles('scripts/fetch-cubism-sdk.sh', 'packages/react-native-live2d-skia/package.json') }}
+          fail-on-cache-miss: true
       - run: bash scripts/fetch-cubism-sdk.sh
 
       - uses: actions/setup-java@v4
@@ -55,20 +80,32 @@ jobs:
           distribution: temurin
           java-version: "17"
       - uses: android-actions/setup-android@v4
+      - id: ndk
+        run: echo "version=$(awk -F'"' '/^ndkVersion/ {print $2}' node_modules/react-native/gradle/libs.versions.toml)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: |
+            /usr/local/lib/android/sdk/ndk/${{ steps.ndk.outputs.version }}
+            /usr/local/lib/android/sdk/cmake/${{ env.ANDROID_CMAKE_VERSION }}
+          key: android-ndk-${{ steps.ndk.outputs.version }}-cmake-${{ env.ANDROID_CMAKE_VERSION }}-${{ hashFiles('node_modules/react-native/gradle/libs.versions.toml') }}
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Prebuild
         working-directory: apps/${{ matrix.app }}
         run: bunx expo prebuild --platform android --no-install
-      # One ABI keeps CI fast; the apps build three.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.gradle/wrapper/dists
+          key: gradle-wrapper-${{ hashFiles(format('apps/{0}/android/gradle/wrapper/gradle-wrapper.properties', matrix.app)) }}
       - name: Build debug APK
         working-directory: apps/${{ matrix.app }}/android
         run: ./gradlew :app:assembleDebug -PreactNativeArchitectures=arm64-v8a
 
   ios:
-    name: test (${{ matrix.app }})
+    name: ios (${{ matrix.app }})
     runs-on: macos-26
     timeout-minutes: 90
+    needs: sdk
     strategy:
       fail-fast: false
       matrix:
@@ -83,13 +120,13 @@ jobs:
           bun-version: latest
       - run: bun install --frozen-lockfile
 
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
         with:
           path: apps/app/vendor/CubismSdkForNative-*.zip
           key: cubism-sdk-${{ hashFiles('scripts/fetch-cubism-sdk.sh', 'packages/react-native-live2d-skia/package.json') }}
+          fail-on-cache-miss: true
       - run: bash scripts/fetch-cubism-sdk.sh
 
-      # Pin one Xcode explicitly: an image with several can dual-load frameworks.
       - name: Select Xcode
         run: |
           sudo xcode-select -s /Applications/Xcode.app
@@ -102,8 +139,11 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: apps/${{ matrix.app }}/ios/Pods
-          key: pods-${{ matrix.app }}-${{ hashFiles(format('apps/{0}/ios/Podfile.lock', matrix.app)) }}
-          restore-keys: pods-${{ matrix.app }}-
+          key: pods-${{ matrix.app }}-${{ hashFiles('bun.lock', format('apps/{0}/app.json', matrix.app)) }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/ReactNative
+          key: react-native-prebuilt-${{ hashFiles('bun.lock') }}
       - name: Install pods
         working-directory: apps/${{ matrix.app }}/ios
         run: pod install
@@ -120,4 +160,4 @@ jobs:
           SCHEME=$(basename "$WORKSPACES" .xcworkspace)
           xcodebuild -workspace "$WORKSPACES" -scheme "$SCHEME" -configuration Debug \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
-            CODE_SIGNING_ALLOWED=NO build
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO build
