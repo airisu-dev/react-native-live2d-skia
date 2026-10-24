@@ -30,7 +30,7 @@ const origin = (url: string) => /^[a-z][a-z0-9+.-]*:\/\/[^/?#]*/i.exec(url)?.[0]
 const queryOf = (url: string) => /\?[^#]*/.exec(url)?.[0] ?? ''
 
 async function request(url: string, options: Live2DLoadOptions) {
-  let res: Response
+  let res: Awaited<ReturnType<typeof fetch>>
   try {
     res = await fetch(url, { headers: options.headers })
   } catch (e) {
