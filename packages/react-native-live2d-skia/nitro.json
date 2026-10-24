@@ -1,0 +1,20 @@
+{
+  "$schema": "https://nitro.margelo.com/nitro.schema.json",
+  "cxxNamespace": ["live2dskia"],
+  "ios": {
+    "iosModuleName": "Live2dSkia"
+  },
+  "android": {
+    "androidNamespace": ["live2dskia"],
+    "androidCxxLibName": "Live2dSkia"
+  },
+  "autolinking": {
+    "Live2dSkia": {
+      "all": {
+        "language": "c++",
+        "implementationClassName": "HybridLive2dSkia"
+      }
+    }
+  },
+  "ignorePaths": ["**/node_modules"]
+}

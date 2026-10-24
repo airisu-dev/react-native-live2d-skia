@@ -1,0 +1,123 @@
+name: Test Build
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - packages/react-native-live2d-skia/cpp/**
+      - packages/react-native-live2d-skia/android/**
+      - packages/react-native-live2d-skia/ios/**
+      - packages/react-native-live2d-skia/plugin/**
+      - packages/react-native-live2d-skia/src/specs/**
+      - packages/react-native-live2d-skia/nitro.json
+      - packages/react-native-live2d-skia/*.podspec
+      - packages/react-native-live2d-skia/package.json
+      - apps/*/app.json
+      - apps/*/package.json
+      - bun.lock
+      - scripts/fetch-cubism-sdk.sh
+      - .github/workflows/test-build.yml
+  workflow_dispatch:
+
+concurrency:
+  group: test-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    name: test (${{ matrix.app }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [app, app-skia2]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+
+      # Cubism SDK and sample models are proprietary and gitignored. Both apps use
+      # apps/app/vendor, so one fetch serves the whole matrix.
+      - uses: actions/cache@v4
+        with:
+          path: apps/app/vendor/CubismSdkForNative-*.zip
+          key: cubism-sdk-${{ hashFiles('scripts/fetch-cubism-sdk.sh', 'packages/react-native-live2d-skia/package.json') }}
+      - run: bash scripts/fetch-cubism-sdk.sh
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v4
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Prebuild
+        working-directory: apps/${{ matrix.app }}
+        run: bunx expo prebuild --platform android --no-install
+      # One ABI keeps CI fast; the apps build three.
+      - name: Build debug APK
+        working-directory: apps/${{ matrix.app }}/android
+        run: ./gradlew :app:assembleDebug -PreactNativeArchitectures=arm64-v8a
+
+  ios:
+    name: test (${{ matrix.app }})
+    runs-on: macos-26
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [app, app-skia2]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+
+      - uses: actions/cache@v4
+        with:
+          path: apps/app/vendor/CubismSdkForNative-*.zip
+          key: cubism-sdk-${{ hashFiles('scripts/fetch-cubism-sdk.sh', 'packages/react-native-live2d-skia/package.json') }}
+      - run: bash scripts/fetch-cubism-sdk.sh
+
+      # Pin one Xcode explicitly: an image with several can dual-load frameworks.
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode.app
+          xcodebuild -version
+
+      - name: Prebuild
+        working-directory: apps/${{ matrix.app }}
+        run: bunx expo prebuild --platform ios --no-install
+
+      - uses: actions/cache@v4
+        with:
+          path: apps/${{ matrix.app }}/ios/Pods
+          key: pods-${{ matrix.app }}-${{ hashFiles(format('apps/{0}/ios/Podfile.lock', matrix.app)) }}
+          restore-keys: pods-${{ matrix.app }}-
+      - name: Install pods
+        working-directory: apps/${{ matrix.app }}/ios
+        run: pod install
+
+      - name: Build for simulator
+        working-directory: apps/${{ matrix.app }}
+        run: |
+          set -euo pipefail
+          WORKSPACES=$(find ios -maxdepth 1 -name '*.xcworkspace')
+          if [ "$(echo "$WORKSPACES" | grep -c .)" != "1" ]; then
+            echo "::error::Expected exactly one .xcworkspace in ios/, found: ${WORKSPACES:-none}"
+            exit 1
+          fi
+          SCHEME=$(basename "$WORKSPACES" .xcworkspace)
+          xcodebuild -workspace "$WORKSPACES" -scheme "$SCHEME" -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build

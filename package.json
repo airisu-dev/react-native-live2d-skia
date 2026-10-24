@@ -1,0 +1,26 @@
+{
+  "name": "react-native-live2d-skia-monorepo",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "start": "bun run --cwd apps/app start",
+    "android": "bun run --cwd apps/app android",
+    "ios": "bun run --cwd apps/app ios",
+    "lint": "biome lint .",
+    "typecheck": "tsc --noEmit -p apps/app && tsc --noEmit -p apps/app-skia2 && tsc --noEmit -p packages/react-native-live2d-skia && tsc -b packages/react-native-live2d-skia/plugin packages/react-native-live2d-skia/cli",
+    "codegen": "bun --cwd packages/react-native-live2d-skia codegen",
+    "fetch:cubism": "bash scripts/fetch-cubism-sdk.sh",
+    "postinstall": "tsc -b packages/react-native-live2d-skia/plugin packages/react-native-live2d-skia/cli",
+    "format": "biome check .",
+    "format:write": "biome check --write .",
+    "prepare": "lefthook install"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.2",
+    "lefthook": "2.2.2",
+    "typescript": "~6.0.3"
+  }
+}

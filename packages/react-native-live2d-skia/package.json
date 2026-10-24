@@ -1,0 +1,143 @@
+{
+  "name": "@airisu-dev/react-native-live2d-skia",
+  "version": "0.1.0",
+  "description": "react-native-live2d-skia is a react native package built with Nitro",
+  "main": "src/index",
+  "types": "src/index",
+  "react-native": "src/index",
+  "source": "src/index",
+  "bin": {
+    "react-native-live2d-skia": "cli/build/index.js"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "clean": "git clean -dfX",
+    "build": "bun run typecheck && bob build && tsc -b plugin cli",
+    "codegen": "nitrogen --logLevel=debug",
+    "build:node": "tsc -b plugin cli",
+    "prepack": "tsc -b plugin cli"
+  },
+  "keywords": [
+    "react-native",
+    "react-native-live2d-skia"
+  ],
+  "files": [
+    "src",
+    "react-native.config.js",
+    "lib",
+    "nitrogen",
+    "cpp",
+    "nitro.json",
+    "android/build.gradle",
+    "android/fix-prefab.gradle",
+    "android/gradle.properties",
+    "android/CMakeLists.txt",
+    "android/src",
+    "ios/**/*.h",
+    "ios/**/*.m",
+    "ios/**/*.mm",
+    "ios/**/*.cpp",
+    "ios/**/*.swift",
+    "app.plugin.js",
+    "plugin/build",
+    "cli/build",
+    "*.podspec",
+    "README.md"
+  ],
+  "repository": "https://github.com/airisu-dev/react-native-live2d-skia.git",
+  "author": "airisu-dev",
+  "license": "MIT",
+  "bugs": "https://github.com/airisu-dev/react-native-live2d-skia/issues",
+  "homepage": "https://github.com/airisu-dev/react-native-live2d-skia#readme",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "@types/react": "19.2.0",
+    "nitrogen": "^0.37.1",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-builder-bob": "^0.40.18",
+    "react-native-nitro-modules": "^0.37.1",
+    "typescript": "^6.0.3"
+  },
+  "peerDependencies": {
+    "expo": "*",
+    "expo-asset": "*",
+    "expo-file-system": "*",
+    "react": "*",
+    "react-native": "*",
+    "react-native-gesture-handler": "*",
+    "react-native-nitro-modules": "*",
+    "react-native-reanimated": "*",
+    "react-native-skia": ">=3.3.0",
+    "@shopify/react-native-skia": ">=2.10.0",
+    "react-native-worklets": "*"
+  },
+  "peerDependenciesMeta": {
+    "@shopify/react-native-skia": {
+      "optional": true
+    },
+    "react-native-skia": {
+      "optional": true
+    }
+  },
+  "eslintConfig": {
+    "root": true,
+    "extends": [
+      "@react-native",
+      "prettier"
+    ],
+    "plugins": [
+      "prettier"
+    ],
+    "rules": {
+      "prettier/prettier": [
+        "warn",
+        {
+          "quoteProps": "consistent",
+          "singleQuote": true,
+          "tabWidth": 2,
+          "trailingComma": "es5",
+          "useTabs": false
+        }
+      ]
+    }
+  },
+  "eslintIgnore": [
+    "node_modules/",
+    "lib/"
+  ],
+  "prettier": {
+    "quoteProps": "consistent",
+    "singleQuote": true,
+    "tabWidth": 2,
+    "trailingComma": "es5",
+    "useTabs": false,
+    "semi": false
+  },
+  "react-native-builder-bob": {
+    "source": "src",
+    "output": "lib",
+    "targets": [
+      "commonjs",
+      "module",
+      [
+        "typescript",
+        {
+          "project": "tsconfig.json"
+        }
+      ]
+    ]
+  },
+  "cubismSdk": {
+    "latest": "5-r.5",
+    "versions": {
+      "5-r.5": {
+        "sha256": "7ff3a4bbc19c0a8728965aa522ab77eb11b252916453e68a8a78d3b71188bb12"
+      }
+    }
+  }
+}

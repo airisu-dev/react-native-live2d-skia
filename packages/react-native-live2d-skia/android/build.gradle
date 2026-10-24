@@ -1,0 +1,223 @@
+buildscript {
+  repositories {
+    google()
+    mavenCentral()
+  }
+
+  dependencies {
+    classpath "com.android.tools.build:gradle:8.8.0"
+  }
+}
+
+def reactNativeArchitectures() {
+  def value = rootProject.getProperties().get("reactNativeArchitectures")
+  return value ? value.split(",") : ["armeabi-v7a", "x86", "x86_64", "arm64-v8a"]
+}
+
+def isNewArchitectureEnabled() {
+  return rootProject.hasProperty("newArchEnabled") && rootProject.getProperty("newArchEnabled") == "true"
+}
+
+apply plugin: "com.android.library"
+apply plugin: 'org.jetbrains.kotlin.android'
+apply from: '../nitrogen/generated/android/Live2dSkia+autolinking.gradle'
+apply from: "./fix-prefab.gradle"
+
+if (isNewArchitectureEnabled()) {
+  apply plugin: "com.facebook.react"
+}
+
+// Cubism SDK for Native: proprietary, so each app downloads it from Live2D and
+// sets its folder (app.plugin.js writes live2dSkia.cubismSdkPath, relative to android/).
+def findCubismSdk() {
+  def configured = System.getenv("LIVE2D_SKIA_CUBISM_SDK") ?: rootProject.findProperty("live2dSkia.cubismSdkPath")
+  if (!configured) {
+    throw new GradleException("[react-native-live2d-skia] Cubism SDK for Native isn't configured. Add the plugin to app.json: " +
+      "[\"@airisu-dev/react-native-live2d-skia\", { \"cubismSdkPath\": \"./vendor/CubismSdkForNative\" }], download the SDK with `@airisu-dev/react-native-live2d-skia fetch-sdk --accept-license` (through npx, bunx, yarn or pnpm), then prebuild.")
+  }
+  def dir = rootProject.file(configured)
+  def info = new File(dir, "cubism-info.yml")
+  if (!info.exists()) {
+    throw new GradleException("[react-native-live2d-skia] Cubism SDK for Native not found at ${dir} (no cubism-info.yml). " +
+      "Download it with `@airisu-dev/react-native-live2d-skia fetch-sdk --accept-license` (through npx, bunx, yarn or pnpm).")
+  }
+  def matcher = info.text =~ /(?m)^version:\s*(\S+)/
+  def version = matcher.find() ? matcher.group(1) : "unknown"
+  checkCubismSdkVersion(version, dir)
+  return [dir: dir.absolutePath.replace("\\", "/"), version: version]
+}
+
+// A Cubism SDK version as a number: major * 10000 + release * 100 + patch, so
+// 5-r.4.1 is 50401 (a -beta suffix is ignored). Null if it isn't one.
+def cubismSdkVersionNumber(String version) {
+  def m = version =~ /^(\d+)-r\.(\d+)(?:\.(\d+))?/
+  return m.find() ? m.group(1).toInteger() * 10000 + m.group(2).toInteger() * 100 + (m.group(3) ?: "0").toInteger() : null
+}
+
+// Listed versions (cubismSdk.versions in package.json) are supported. A newer
+// release of a listed major only warns; anything else fails.
+def checkCubismSdkVersion(String version, File dir) {
+  def listed = new groovy.json.JsonSlurper().parse(file("../package.json")).cubismSdk.versions.keySet()
+  if (listed.contains(version)) return
+  def number = cubismSdkVersionNumber(version)
+  def newestOfMajor = number == null ? null : listed.collect { cubismSdkVersionNumber(it) }
+    .findAll { it.intdiv(10000) == number.intdiv(10000) }.max()
+  if (newestOfMajor == null || number < newestOfMajor) {
+    throw new GradleException("[react-native-live2d-skia] Cubism SDK for Native ${version} at ${dir} isn't supported: use ${listed.join(', ')}.")
+  }
+  logger.warn("[react-native-live2d-skia] Cubism SDK for Native ${version} found, tested with ${listed.join(', ')}.")
+}
+
+// The folder of a node package, as `from` resolves it. Null if it isn't installed.
+def resolveNodePackage(String name, File from) {
+  def process = ["node", "-p",
+    "require('path').dirname(require.resolve(process.argv[1] + '/package.json', { paths: [process.argv[2]] }))",
+    name, from.absolutePath].execute()
+  def out = process.text.trim()
+  return process.waitFor() == 0 && out ? new File(out) : null
+}
+
+// Drawing in C++ onto Skia canvases (cpp/drawing/SkiaDrawer.cpp) needs the headers,
+// defines and prebuilt libskia.a of the Skia the app uses: react-native-skia
+// (v3, Graphite) or @shopify/react-native-skia (v2, Ganesh), as app.plugin.js
+// found in the app's package.json (live2dSkia.skiaPackage). Resolved from the
+// app, since a monorepo can have both installed. No arguments: drawn in JS.
+def skiaCmakeArguments() {
+  def name = rootProject.findProperty("live2dSkia.skiaPackage")
+  if (!name) return []
+  def appDir = rootProject.projectDir.parentFile
+  def skiaDir = resolveNodePackage(name, appDir)
+  def graphite = name == "react-native-skia"
+  def libsDir = skiaDir ? resolveNodePackage(graphite ? "react-native-skia-graphite-android" : "react-native-skia-android", skiaDir) : null
+  def reactNativeDir = resolveNodePackage("react-native", appDir)
+  if (!skiaDir || !libsDir || !reactNativeDir) {
+    logger.warn("[react-native-live2d-skia] ${name} or its Android binaries not found from ${appDir}: drawing in JS.")
+    return []
+  }
+  return ["-DRN_SKIA_DIR=${skiaDir.absolutePath.replace("\\", "/")}",
+          "-DRN_SKIA_LIBS=${new File(libsDir, "libs").absolutePath.replace("\\", "/")}",
+          "-DRN_SKIA_GRAPHITE=${graphite ? "ON" : "OFF"}",
+          "-DREACT_NATIVE_DIR=${reactNativeDir.absolutePath.replace("\\", "/")}"]
+}
+
+def getExtOrDefault(name) {
+  return rootProject.ext.has(name) ? rootProject.ext.get(name) : project.properties["Live2dSkia_" + name]
+}
+
+def getExtOrIntegerDefault(name) {
+  return rootProject.ext.has(name) ? rootProject.ext.get(name) : (project.properties["Live2dSkia_" + name]).toInteger()
+}
+
+android {
+  namespace "com.live2dskia"
+
+  ndkVersion getExtOrDefault("ndkVersion")
+  compileSdkVersion getExtOrIntegerDefault("compileSdkVersion")
+
+  defaultConfig {
+    minSdkVersion getExtOrIntegerDefault("minSdkVersion")
+    targetSdkVersion getExtOrIntegerDefault("targetSdkVersion")
+    buildConfigField "boolean", "IS_NEW_ARCHITECTURE_ENABLED", isNewArchitectureEnabled().toString()
+
+    externalNativeBuild {
+      cmake {
+        cppFlags "-frtti -fexceptions -Wall -Wextra -fstack-protector-all"
+        def cubismSdk = findCubismSdk()
+        arguments "-DANDROID_STL=c++_shared", "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON",
+          "-DCUBISM_SDK_DIR=${cubismSdk.dir}",
+          "-DCUBISM_SDK_VERSION_NUMBER=${cubismSdkVersionNumber(cubismSdk.version)}", *skiaCmakeArguments()
+        abiFilters (*reactNativeArchitectures())
+
+        buildTypes {
+          debug {
+            cppFlags "-O1 -g"
+          }
+          release {
+            cppFlags "-O2"
+          }
+        }
+      }
+    }
+  }
+
+  externalNativeBuild {
+    cmake {
+      path "CMakeLists.txt"
+    }
+  }
+
+  packagingOptions {
+    excludes = [
+        "META-INF",
+        "META-INF/**",
+        "**/libc++_shared.so",
+        "**/libfbjni.so",
+        "**/libjsi.so",
+        "**/libfolly_json.so",
+        "**/libfolly_runtime.so",
+        "**/libglog.so",
+        "**/libhermes.so",
+        "**/libhermes-executor-debug.so",
+        "**/libhermes_executor.so",
+        "**/libreactnative.so",
+        "**/libreactnativejni.so",
+        "**/libturbomodulejsijni.so",
+        "**/libreact_nativemodule_core.so",
+        "**/libjscexecutor.so"
+    ]
+  }
+
+  buildFeatures {
+    buildConfig true
+    prefab true
+  }
+
+  buildTypes {
+    release {
+      minifyEnabled false
+    }
+  }
+
+  lintOptions {
+    disable "GradleCompatible"
+  }
+
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_1_8
+    targetCompatibility JavaVersion.VERSION_1_8
+  }
+
+  sourceSets {
+    main {
+      if (isNewArchitectureEnabled()) {
+        java.srcDirs += [
+          // React Codegen files
+          "${project.buildDir}/generated/source/codegen/java"
+        ]
+      }
+    }
+  }
+}
+
+repositories {
+  mavenCentral()
+  google()
+}
+
+
+dependencies {
+  // For < 0.71, this will be from the local maven repo
+  // For > 0.71, this will be replaced by `com.facebook.react:react-android:$version` by react gradle plugin
+  //noinspection GradleDynamicVersion
+  implementation "com.facebook.react:react-native:+"
+
+  implementation project(":react-native-nitro-modules")
+}
+
+if (isNewArchitectureEnabled()) {
+  react {
+    jsRootDir = file("../src/")
+    libraryName = "Live2dSkia"
+    codegenJavaPackageName = "com.live2dskia"
+  }
+}

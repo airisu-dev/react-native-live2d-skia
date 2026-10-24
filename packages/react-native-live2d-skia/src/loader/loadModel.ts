@@ -1,0 +1,194 @@
+import { Asset } from 'expo-asset'
+import { File } from 'expo-file-system'
+import { Live2dSkia } from '../native'
+import {
+  type CanvasInfo,
+  createDrawer,
+  createNativeDrawer,
+  setNativeTextures,
+} from '../rendering/drawer'
+import {
+  FilterMode,
+  MipmapMode,
+  type SkImage,
+  Skia,
+  type SkPicture,
+  type SkShader,
+  TileMode,
+} from '../rendering/skia'
+import type {
+  MotionPriority,
+  Live2DModel as NativeModel,
+} from '../specs/react-native-live2d-skia.nitro'
+import { toCubismJson } from './cubismJson'
+import { isModelContext, type Live2DModelContext, sourceFromContext } from './modelContext'
+import { fetchBytes, isRemote, type Live2DLoadOptions, redactUrl, sourceFromUrl } from './modelUrl'
+
+export type AssetSource = number | string
+
+/** A parsed Cubism JSON file, e.g. `require('../model.physics3.json')`. */
+export type CubismJson = object
+
+export interface Live2DModelSource {
+  /** Parsed `model3.json`. */
+  settings: CubismJson
+  moc: AssetSource
+  /** In the order of `FileReferences.Textures`. */
+  textures: AssetSource[]
+  physics?: CubismJson
+  pose?: CubismJson
+  /** By group, in the order of `FileReferences.Motions`. A random `Idle` motion plays when nothing else does. */
+  motions?: Record<string, CubismJson[]>
+  expressions?: Record<string, CubismJson>
+}
+
+/** A loaded model. Points are in model pixels: native canvas size, origin top-left, like `picture`. */
+export interface Live2DModel {
+  /**
+   * Plays a motion of `group`, a random one without `index`. Returns false
+   * if there's no such motion or one with a higher priority is playing.
+   */
+  motion(group: string, index?: number, priority?: MotionPriority): boolean
+  /** Fades to an expression, a random one without `name`. Returns false if there's none. */
+  expression(name?: string): boolean
+  resetExpression(): void
+  /** Holds a parameter at `value`, over motions, until `resetParameter`. */
+  setParameter(id: string, value: number): void
+  resetParameter(id: string): void
+  focus(x: number, y: number): void
+  resetFocus(): void
+  /** Names of the `model3.json` hit areas at a point, e.g. `['Head', 'Body']`. */
+  hitTest(x: number, y: number): string[]
+  motionGroups: string[]
+  expressionNames: string[]
+
+  /** Unique per loaded model: <Live2D>s showing the same model share its frames. */
+  id: number
+  /** Native model. Thread-safe. */
+  native: NativeModel
+  /** The model drawn at load, at its native canvas size, origin top-left. */
+  picture: SkPicture
+  width: number
+  height: number
+  /** Draws the model's current state (after `native.update`) into a new picture. */
+  draw(): SkPicture
+  /** For drawing on another worklet runtime with `createDrawer`. */
+  textures: SkImage[]
+  shaders: SkShader[]
+  canvas: CanvasInfo
+}
+
+// For error messages: URLs lose their query, which can hold tokens.
+const describe = (source: AssetSource) =>
+  typeof source === 'string' ? redactUrl(source) : String(source)
+
+async function readAsset(source: AssetSource, options: Live2DLoadOptions): Promise<ArrayBuffer> {
+  // Remote files are fetched directly: expo-asset can't send headers.
+  if (isRemote(source)) return fetchBytes(source, options)
+  const asset = Asset.fromModule(source)
+  // Android release builds embed images as drawables, and expo-asset marks them
+  // downloaded with a bare resource name (enough for <Image>), which isn't a file.
+  // Download for real: that copies the resource into the cache.
+  if (asset.localUri && !asset.localUri.includes(':')) {
+    asset.downloaded = false
+    asset.localUri = null
+  }
+  await asset.downloadAsync()
+  if (!asset.localUri) {
+    throw new Error(`Live2D: failed to download asset ${describe(source)}`)
+  }
+  return new File(asset.localUri).arrayBuffer()
+}
+
+async function loadTexture(source: AssetSource, options: Live2DLoadOptions): Promise<SkImage> {
+  const bytes = new Uint8Array(await readAsset(source, options))
+  const image = Skia.Image.MakeImageFromEncoded(Skia.Data.fromBytes(bytes))
+  if (!image) {
+    throw new Error(`Live2D: failed to decode texture ${describe(source)}`)
+  }
+  return image
+}
+
+let nextModelId = 1
+
+/**
+ * Loads a model from its files, from a `require.context` of its folder, or
+ * from the URL of its `model3.json` (the files it lists are fetched next to it).
+ * `options` apply to every remote file.
+ */
+export async function loadLive2DModel(
+  input: Live2DModelSource | Live2DModelContext | string,
+  options: Live2DLoadOptions = {},
+): Promise<Live2DModel> {
+  const source =
+    typeof input === 'string'
+      ? await sourceFromUrl(input, options)
+      : isModelContext(input)
+        ? sourceFromContext(input)
+        : input
+  const [moc, textures] = await Promise.all([
+    readAsset(source.moc, options),
+    Promise.all(source.textures.map((t) => loadTexture(t, options))),
+  ])
+  const native = Live2dSkia.loadModel(moc, toCubismJson(source.settings))
+  if (source.physics) native.loadPhysics(toCubismJson(source.physics))
+  if (source.pose) native.loadPose(toCubismJson(source.pose))
+  for (const [group, motions] of Object.entries(source.motions ?? {})) {
+    motions.forEach((motion, i) => {
+      native.loadMotion(group, i, toCubismJson(motion))
+    })
+  }
+  for (const [name, expression] of Object.entries(source.expressions ?? {})) {
+    native.loadExpression(name, toCubismJson(expression))
+  }
+  // Apply the pose and the first idle motion's starting state.
+  native.update(0)
+
+  // Trilinear: models are usually drawn far smaller than their 2048px textures,
+  // and without mipmaps thin lines (hair, outlines) break up into jaggies.
+  const shaders = textures.map((t) =>
+    t.makeShaderOptions(TileMode.Clamp, TileMode.Clamp, FilterMode.Linear, MipmapMode.Linear),
+  )
+  const width = native.canvasWidth
+  const height = native.canvasHeight
+  const canvas: CanvasInfo = {
+    width,
+    height,
+    originX: native.originX,
+    originY: native.originY,
+    pixelsPerUnit: native.pixelsPerUnit,
+  }
+  setNativeTextures(native, textures, shaders)
+  const nativeDraw = createNativeDrawer(native, canvas)
+  const drawer = createDrawer(textures, shaders, canvas)
+  const draw = nativeDraw ?? (() => drawer(native.getDrawables()))
+  // Model pixels (y-down) to model units (y-up).
+  const toUnits = (x: number, y: number) =>
+    [
+      (x - canvas.originX) / canvas.pixelsPerUnit,
+      (canvas.originY - y) / canvas.pixelsPerUnit,
+    ] as const
+
+  return {
+    id: nextModelId++,
+    motion: (group, index, priority) => native.startMotion(group, index, priority),
+    expression: (name) => native.setExpression(name),
+    resetExpression: () => native.clearExpression(),
+    setParameter: (id, value) => native.setParameter(id, value),
+    resetParameter: (id) => native.clearParameter(id),
+    // Relative to the canvas center, -1..1, y-up.
+    focus: (x, y) => native.focus((x / width) * 2 - 1, 1 - (y / height) * 2),
+    resetFocus: () => native.focus(0, 0),
+    hitTest: (x, y) => native.hitTest(...toUnits(x, y)),
+    motionGroups: Object.keys(source.motions ?? {}),
+    expressionNames: Object.keys(source.expressions ?? {}),
+    native,
+    picture: draw(),
+    width,
+    height,
+    draw,
+    textures,
+    shaders,
+    canvas,
+  }
+}

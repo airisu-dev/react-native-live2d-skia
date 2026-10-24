@@ -1,0 +1,56 @@
+This is an Expo/React Native mobile application. Prioritize mobile-first patterns, performance, and cross-platform compatibility.
+
+## Expo has changed — do not trust your training data
+
+Expo ships breaking changes every SDK release. APIs you remember are likely renamed, moved, or removed. Before writing any code that touches an Expo, EAS, or React Native API:
+1. Read the major version of the `expo` package in `package.json`.
+2. Fetch the matching versioned docs: `https://docs.expo.dev/versions/v<major>.0.0/`
+3. For anything else, fetch https://docs.expo.dev/llms.txt — an index of all Expo docs with corrections to common LLM misconceptions. Follow its links to the specific page you need; never answer from memory.
+
+## Commands
+
+Use `bunx` instead of `npx` if the project uses bun (`bun.lock` present).
+
+```bash
+npx expo install <package>  # ALWAYS use instead of npm/yarn/pnpm/bun add — resolves SDK-compatible versions
+npx expo start              # start the dev server
+npx expo lint               # lint (here: `bun run lint` from the root)
+npx tsc --noEmit            # typecheck (here: `bun run typecheck` from the root)
+npx expo-doctor             # diagnose dependency and config issues
+npx expo install --fix      # fix incompatible package versions
+```
+
+### Local Android development
+
+This project uses native modules (Skia, Nitro), so Expo Go won't work — use a development build. Use `bunx` (bun.lock present).
+
+This is a monorepo: the library is `packages/react-native-live2d-skia/`, the demo app is `apps/app/` (its `app.json`, `eas.json`, `src/`, generated `android/` and `ios/`). Run `bun install`, `bun run lint`, `bun run typecheck` and `bun run fetch:cubism` from the root; run Expo and EAS commands (and `rnd`) from `apps/app`.
+
+```bash
+cd apps/app
+bunx expo prebuild --platform android  # regenerate android/ from app.json + config plugins
+bunx expo run:android                  # build, install the dev client, and start Metro
+```
+
+- Re-run `prebuild` after changing `app.json`, config plugins, or native dependencies.
+- If the build fails with stale paths (e.g. after moving the project), delete `android/build/generated/autolinking` and `android/.gradle`, run `android/gradlew.bat --stop` (a running daemon locks `android/`), then prebuild again.
+- `bunfig.toml` sets `linker = "hoisted"` on purpose: Bun's default isolated `node_modules/.bun/...` layout makes CMake paths exceed the Windows 250-char limit and breaks the native build. Don't remove it.
+
+Run lint and typecheck before declaring any task done.
+
+## Navigation & Routing
+
+- Use **Expo Router** for all navigation. Routes live in `apps/app/src/app/` — every file there is a screen, `_layout.tsx` files define navigators. Keep non-route code (components, hooks, utils) outside `apps/app/src/app/`.
+- Import `Link`, `router`, and `useLocalSearchParams` from `expo-router`.
+- Docs: https://docs.expo.dev/router/introduction.md
+
+## Building with EAS
+
+Use EAS to build, sign, and submit the app in the cloud (`eas build`, `eas submit`) and to ship over-the-air updates (`eas update`) — no local Xcode or Android Studio required. Run EAS CLI as `bunx eas-cli <command>` in Bun projects, or `npx eas-cli@latest <command>` otherwise; substitute that for bare `eas` in docs examples.
+Docs: https://docs.expo.dev/eas/index.md
+
+## Rules
+
+- If `apps/app/ios/` and `apps/app/android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `apps/app/app.json` and config plugins.
+- Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
+- Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
