@@ -2,6 +2,7 @@
 // Skia itself. rendering/skia.ts loads the real thing, and scripts/skiaCompat.ts checks every
 // supported Skia version against these types.
 import type { ComponentType, ReactNode } from 'react'
+import type { SharedValue } from 'react-native-reanimated'
 
 export interface SkPoint {
   x: number
@@ -91,7 +92,8 @@ export interface SkiaModule {
   FilterMode: { Linear: number }
   MipmapMode: { Linear: number }
   Group: ComponentType<{
-    transform?: Record<string, number>[]
+    // Or a shared value of one (Reanimated): redrawn without a React render.
+    transform?: Record<string, number>[] | SharedValue<Record<string, number>[]>
     children?: ReactNode
   }>
   // A picture or a shared value of one (Reanimated).

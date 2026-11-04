@@ -8,9 +8,17 @@ import {
   useLive2DGestures,
   useLive2DModel,
 } from '@airisu-dev/react-native-live2d-skia'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { type LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native'
 import { GestureDetector } from 'react-native-gesture-handler'
+import {
+  Easing,
+  type SharedValue,
+  useDerivedValue,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   BlurMask,
@@ -84,10 +92,6 @@ function fit(
   }
 }
 
-function offset(place: { x: number; y: number; scale: number }, by: { x: number; y: number }) {
-  return { ...place, x: place.x + by.x, y: place.y + by.y }
-}
-
 function ModelView({ source }: { source: Live2DModelContext | string }) {
   const state = useLive2DModel(source)
   const { model } = state
@@ -98,17 +102,24 @@ function ModelView({ source }: { source: Live2DModelContext | string }) {
     const { width, height } = e.nativeEvent.layout
     setSize({ width, height })
   }
-  // Where the model has been dragged to, relative to its fitted place.
-  const [moved, setMoved] = useState({ x: 0, y: 0 })
+  // Where the model has been dragged to, relative to its fitted place. Shared values:
+  // dragging moves the model without a React render.
+  const movedX = useSharedValue(0)
+  const movedY = useSharedValue(0)
   const fitted = fit(model, { x: 0, y: 0, ...size })
-  const { x, y, scale } = offset(fitted, moved)
+  const x = useDerivedValue(() => fitted.x + movedX.value)
+  const y = useDerivedValue(() => fitted.y + movedY.value)
+  const { scale } = fitted
   // Follow the finger; tap the body (or Mao's head) to play a motion (or expression).
   // Long-press the model to drag it around.
   const gesture = useLive2DGesture(model, {
     x,
     y,
     scale,
-    onMove: (nx, ny) => setMoved({ x: nx - fitted.x, y: ny - fitted.y }),
+    onMove: (nx, ny) => {
+      movedX.set(nx - fitted.x)
+      movedY.set(ny - fitted.y)
+    },
   })
 
   return (
@@ -123,6 +134,26 @@ function ModelView({ source }: { source: Live2DModelContext | string }) {
       {model && <ControlsPanel model={model} />}
     </View>
   )
+}
+
+// A model's place for <Live2D> and the gestures: its fitted place, plus where it was dragged to,
+// plus a point on a circle of `radius` that `angle` (shared by the models) walks along.
+function useOrbitPlace(
+  fitted: { x: number; y: number },
+  angle: SharedValue<number>,
+  phase: number,
+  radius: number,
+) {
+  const movedX = useSharedValue(0)
+  const movedY = useSharedValue(0)
+  const x = useDerivedValue(() => fitted.x + movedX.value + radius * Math.cos(angle.value + phase))
+  const y = useDerivedValue(() => fitted.y + movedY.value + radius * Math.sin(angle.value + phase))
+  // The drag moves the model's place, not the orbit: take the orbit's offset back out.
+  const onMove = (nx: number, ny: number) => {
+    movedX.set(nx - fitted.x - radius * Math.cos(angle.get() + phase))
+    movedY.set(ny - fitted.y - radius * Math.sin(angle.get() + phase))
+  }
+  return { x, y, onMove }
 }
 
 // Every sample model in one canvas, side by side: one shared animation loop.
@@ -142,22 +173,19 @@ function AllModelsView() {
   const half = size.width / 2
   const hiyoriFitted = fit(hiyori, { x: 0, y: 0, width: half, height: size.height })
   const maoFitted = fit(mao, { x: half, y: 0, width: half, height: size.height })
-  const [hiyoriMoved, setHiyoriMoved] = useState({ x: 0, y: 0 })
-  const [maoMoved, setMaoMoved] = useState({ x: 0, y: 0 })
-  const left = offset(hiyoriFitted, hiyoriMoved)
-  const right = offset(maoFitted, maoMoved)
+  // Both models circle their places, on opposite sides of the circle. The angle is one shared
+  // value on the UI thread: no React render per frame, so the frame stats show the loop's own cost.
+  const angle = useSharedValue(0)
+  useEffect(() => {
+    angle.set(withRepeat(withTiming(2 * Math.PI, { duration: 6000, easing: Easing.linear }), -1))
+  }, [angle])
+  const radius = Math.min(size.width, size.height) * 0.08
+  const left = useOrbitPlace(hiyoriFitted, angle, 0, radius)
+  const right = useOrbitPlace(maoFitted, angle, Math.PI, radius)
   // One gesture for every model: a tap goes to the topmost model it hits.
   const gesture = useLive2DGestures([
-    {
-      model: hiyori,
-      ...left,
-      onMove: (x, y) => setHiyoriMoved({ x: x - hiyoriFitted.x, y: y - hiyoriFitted.y }),
-    },
-    {
-      model: mao,
-      ...right,
-      onMove: (x, y) => setMaoMoved({ x: x - maoFitted.x, y: y - maoFitted.y }),
-    },
+    { model: hiyori, x: left.x, y: left.y, scale: hiyoriFitted.scale, onMove: left.onMove },
+    { model: mao, x: right.x, y: right.y, scale: maoFitted.scale, onMove: right.onMove },
   ])
 
   return (
@@ -175,11 +203,23 @@ function AllModelsView() {
           <Circle cx={size.width * 0.8} cy={size.height * 0.22} r={48} color="#ffe08a">
             <BlurMask blur={12} style="solid" />
           </Circle>
-          <FloorShadow model={hiyori} place={left} />
-          <FloorShadow model={mao} place={right} />
+          <FloorShadow model={hiyori} x={left.x} y={left.y} scale={hiyoriFitted.scale} />
+          <FloorShadow model={mao} x={right.x} y={right.y} scale={maoFitted.scale} />
 
-          <Live2D model={hiyori} {...left} onFrameStats={setHiyoriStats} paused />
-          <Live2D model={mao} {...right} onFrameStats={setMaoStats} />
+          <Live2D
+            model={hiyori}
+            x={left.x}
+            y={left.y}
+            scale={hiyoriFitted.scale}
+            onFrameStats={setHiyoriStats}
+          />
+          <Live2D
+            model={mao}
+            x={right.x}
+            y={right.y}
+            scale={maoFitted.scale}
+            onFrameStats={setMaoStats}
+          />
 
           {/* Over the models: drawn last. */}
           <RoundedRect
@@ -228,18 +268,24 @@ function AllModelsView() {
 // below the feet, so it sits a little above the bottom of the model's box.
 function FloorShadow({
   model,
-  place,
+  x,
+  y,
+  scale,
 }: {
   model: Live2DModel | null
-  place: { x: number; y: number; scale: number }
+  x: SharedValue<number>
+  y: SharedValue<number>
+  scale: number
 }) {
+  const width = model ? model.width * scale : 0
+  const height = model ? model.height * scale : 0
+  const shadowX = useDerivedValue(() => x.value + width * 0.3)
+  const shadowY = useDerivedValue(() => y.value + height * 0.9)
   if (!model) return null
-  const width = model.width * place.scale
-  const height = model.height * place.scale
   return (
     <Oval
-      x={place.x + width * 0.3}
-      y={place.y + height * 0.9}
+      x={shadowX}
+      y={shadowY}
       width={width * 0.4}
       height={height * 0.04}
       color="rgba(40, 50, 80, 0.25)"

@@ -162,6 +162,17 @@ const gesture = useLive2DGestures([
 </GestureDetector>
 ```
 
+To animate a model, pass Reanimated shared values as `x`, `y` or `scale` (the gesture hooks take the same). It moves on the UI thread, with no React render per frame:
+
+```tsx
+const x = useSharedValue(0)
+useEffect(() => {
+  x.set(withRepeat(withTiming(80, { duration: 1500 }), -1, true))
+}, [x])
+// …
+<Live2D model={model} x={x} y={0} scale={0.4} />
+```
+
 Inside a `<Canvas>`, JSX order is drawing order: a `<Live2D>` is one layer among ordinary Skia shapes. One animation loop updates and draws every shown model each frame, and two `<Live2D>`s showing the same model share its frames.
 
 ### Controlling the model
@@ -208,8 +219,8 @@ Methods can be called from the JS thread while the model animates on its backgro
 | Prop                  | Description                                                                                                                                                                          |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `model`               | `model` from `useLive2DModel` (renders nothing while `null`)                                                                                                                         |
-| `x`, `y`              | Top-left position on the canvas. Default `0`                                                                                                                                         |
-| `scale`               | Uniform scale of the model's native canvas size. Default `1`                                                                                                                         |
+| `x`, `y`              | Top-left position on the canvas: a number, or a Reanimated shared value. Default `0`                                                                                                 |
+| `scale`               | Uniform scale of the model's native canvas size: a number, or a shared value. Default `1`                                                                                            |
 | `paused`              | Stops animating, keeps the current frame. Default `false`                                                                                                                            |
 | `maxFps`              | Caps the frame rate (e.g. `30` to save battery). Default: the display's refresh rate                                                                                                 |
 | `onFrameStats(stats)` | About once a second: `fps`, `targetFps`, per-frame times (`workMs`, `updateMs`, `drawablesMs`, `drawMs`, `meshMs`), `meshesBuilt`, `layers` (mask layers), `models` and `loopWorkMs` |
