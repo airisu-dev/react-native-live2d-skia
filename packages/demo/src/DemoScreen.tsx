@@ -22,6 +22,7 @@ import {
   RoundedRect,
   vec,
 } from 'react-native-skia'
+import { ControlsPanel } from './components/ControlsPanel'
 import { MODEL_NAMES, MODELS, type ModelName } from './models'
 
 type Choice = ModelName | 'All'
@@ -119,6 +120,7 @@ function ModelView({ source }: { source: Live2DModelContext | string }) {
       </GestureDetector>
       <LoadStatus states={[state]} />
       {stats && <Text style={styles.stats}>{formatStats(stats)}</Text>}
+      {model && <ControlsPanel model={model} />}
     </View>
   )
 }
@@ -274,8 +276,9 @@ const styles = StyleSheet.create({
   errorText: { textAlign: 'center', color: '#4a5563' },
   stats: {
     position: 'absolute',
-    left: 12,
-    bottom: 12,
+    right: 12,
+    top: 12,
+    textAlign: 'right',
     fontSize: 11,
     fontFamily: 'monospace',
     color: '#4a5563',
