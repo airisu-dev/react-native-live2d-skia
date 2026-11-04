@@ -87,7 +87,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        app: [app, app-skia2]
+        app: [app-skia3, app-skia2]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -140,7 +140,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        app: [app, app-skia2]
+        app: [app-skia3, app-skia2]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

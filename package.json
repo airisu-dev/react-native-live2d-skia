@@ -10,7 +10,7 @@
     "android": "bun run --cwd apps/app android",
     "ios": "bun run --cwd apps/app ios",
     "lint": "biome lint .",
-    "typecheck": "tsc --noEmit -p apps/app && tsc --noEmit -p apps/app-skia2 && tsc --noEmit -p packages/react-native-live2d-skia && tsc --noEmit -p packages/react-native-live2d-skia/plugin && tsc --noEmit -p packages/react-native-live2d-skia/cli && tsc -b packages/react-native-live2d-skia/plugin/tsconfig.build.json packages/react-native-live2d-skia/cli/tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p apps/app && tsc --noEmit -p apps/app-skia2 && tsc --noEmit -p apps/app-skia3 && tsc --noEmit -p packages/react-native-live2d-skia && tsc --noEmit -p packages/react-native-live2d-skia/plugin && tsc --noEmit -p packages/react-native-live2d-skia/cli && tsc -b packages/react-native-live2d-skia/plugin/tsconfig.build.json packages/react-native-live2d-skia/cli/tsconfig.build.json",
     "test": "bun --cwd packages/react-native-live2d-skia test",
     "verify:package": "bun --cwd packages/react-native-live2d-skia verify:package",
     "codegen": "bun --cwd packages/react-native-live2d-skia codegen",
