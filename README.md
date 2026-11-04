@@ -196,6 +196,27 @@ model.hitTest(x, y) // → ['Head']
 
 Methods can be called from the JS thread while the model animates on its background thread: the native model is locked.
 
+### Driving the model from a camera or an animation
+
+To drive parameters at a high rate, e.g. from face tracking, keep the JS thread out of it. `useLive2DParameters` holds parameters at the values of a Reanimated shared value, passing them on from the UI thread. Write the shared value from any worklet:
+
+```tsx
+const values = useSharedValue<Record<string, number>>({})
+useLive2DParameters(model, values, { smoothing: 0.08 })
+// in a worklet: values.value = { ParamAngleX: yaw * 30, ParamEyeLOpen: leftEyeOpen }
+```
+
+A camera frame processor (e.g. react-native-vision-camera with ML Kit or `react-native-fast-tflite`) can also call the native model directly, in one locked call per frame:
+
+```ts
+model.native.setParameters(['ParamAngleX', 'ParamEyeLOpen'], [yaw * 30, leftEyeOpen])
+```
+
+- Values are clamped to each parameter's range, and ids the model doesn't have are ignored.
+- Trackers deliver 15-30 values a second and the display shows 60 frames: `smoothing` (a time constant in seconds, `model.setParameterSmoothing(0.08)`) eases held parameters towards their values in between.
+- Typical mapping: head yaw, pitch and roll to `ParamAngleX`, `ParamAngleY` and `ParamAngleZ` (about ±30°, mirrored for a front camera), eye openness to `ParamEyeLOpen` and `ParamEyeROpen`, mouth openness to `ParamMouthOpenY`, smile to `ParamMouthForm`.
+- `model.setIdleMotionEnabled(false)` stops the random `Idle` motions that start whenever nothing plays, so only your values drive the model. Call `model.resetParameters()` when the face is lost, and the model's own motions take over again.
+
 ## API
 
 ### `useLive2DModel(source, options?)`
@@ -249,6 +270,10 @@ The gesture is built once; targets are read at touch time, so they can change on
 
 The same for one model: `options` is a target (without `model`) plus `focus`.
 
+### `useLive2DParameters(model, values, options?)`
+
+Holds parameters at the values of a `SharedValue<Record<string, number>>` as it changes, from the UI thread, and releases them on unmount. `options.smoothing` is the easing time constant in seconds (default `0`). `useLive2DParameter(model, id, value)` is the same for one parameter and a `SharedValue<number>`.
+
 ### `Live2DModel`
 
 | Member                                           | Description                                                                                                                                     |
@@ -259,6 +284,9 @@ The same for one model: `options` is a target (without `model`) plus `focus`.
 | `setParameter(id, value)` / `resetParameter(id)` | Holds a parameter over motions until reset                                                                                                      |
 | `focus(x, y)` / `resetFocus()`                   | Looks at a point, easing / looks straight ahead                                                                                                 |
 | `hitTest(x, y)`                                  | Names of the `model3.json` hit areas at a point                                                                                                 |
+| `setParameters(values)`                          | `setParameter` for each entry of a `{ id: value }` object, in one locked call                                                                   |
+| `setParameterSmoothing(seconds)`                 | Eases held parameters towards their values; `0` (default) applies them as they are                                                              |
+| `setIdleMotionEnabled(enabled)`                  | Whether a random `Idle` motion starts when nothing plays. Default `true`                                                                        |
 | `resetParameters()` / `getParameter(id)`         | Releases every held parameter / reads a parameter's current value                                                                               |
 | `stopMotion()` / `isMotionPlaying()`             | Stops the playing motion (an `Idle` one starts again) / whether one plays                                                                       |
 | `motions`                                        | `Record<group, MotionInfo[]>`: file, duration, loop and fades of each motion, from the model's files                                            |

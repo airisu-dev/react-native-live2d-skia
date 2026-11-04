@@ -1,13 +1,14 @@
 import type { Live2DModel } from '@airisu-dev/react-native-live2d-skia'
 import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { AnimatePanel } from './AnimatePanel'
 import { ACCENT } from './Chip'
 import { ExpressionPicker } from './ExpressionPicker'
 import { MotionPicker } from './MotionPicker'
 import { ParameterSliders } from './ParameterSliders'
 
-type Tab = 'Expressions' | 'Motions' | 'Parameters'
-const TABS: Tab[] = ['Expressions', 'Motions', 'Parameters']
+type Tab = 'Expressions' | 'Motions' | 'Parameters' | 'Animate'
+const TABS: Tab[] = ['Expressions', 'Motions', 'Parameters', 'Animate']
 
 /** Expression and motion pickers and parameter sliders, in a sheet over the bottom of the screen. */
 export function ControlsPanel({ model }: { model: Live2DModel }) {
@@ -29,6 +30,7 @@ export function ControlsPanel({ model }: { model: Live2DModel }) {
       )}
       {tab === 'Motions' && <MotionPicker model={model} />}
       {tab === 'Parameters' && <ParameterSliders model={model} />}
+      {tab === 'Animate' && <AnimatePanel model={model} />}
     </View>
   )
 }
