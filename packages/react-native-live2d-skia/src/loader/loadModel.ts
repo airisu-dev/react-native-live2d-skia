@@ -23,6 +23,8 @@ import type {
 } from '../specs/react-native-live2d-skia.nitro'
 import { toCubismJson } from './cubismJson'
 import { isModelContext, type Live2DModelContext, sourceFromContext } from './modelContext'
+import { expressionsOf, motionsOf, parametersOf } from './modelInfo'
+import type { ExpressionInfo, MotionInfo, ParameterInfo } from './modelTypes'
 import { fetchBytes, isRemote, type Live2DLoadOptions, redactUrl, sourceFromUrl } from './modelUrl'
 
 export type AssetSource = number | string
@@ -41,6 +43,8 @@ export interface Live2DModelSource {
   /** By group, in the order of `FileReferences.Motions`. A random `Idle` motion plays when nothing else does. */
   motions?: Record<string, CubismJson[]>
   expressions?: Record<string, CubismJson>
+  /** Parsed `cdi3.json` (`FileReferences.DisplayInfo`): names for `Live2DModel.parameters`. */
+  displayInfo?: CubismJson
 }
 
 /** A loaded model. Points are in model pixels: native canvas size, origin top-left, like `picture`. */
@@ -50,18 +54,46 @@ export interface Live2DModel {
    * if there's no such motion or one with a higher priority is playing.
    */
   motion(group: string, index?: number, priority?: MotionPriority): boolean
+  /** Stops the playing motion. A random `Idle` motion starts again after it. */
+  stopMotion(): void
+  /** Whether a motion, idle ones included, is playing. */
+  isMotionPlaying(): boolean
   /** Fades to an expression, a random one without `name`. Returns false if there's none. */
   expression(name?: string): boolean
   resetExpression(): void
-  /** Holds a parameter at `value`, over motions, until `resetParameter`. */
+  /**
+   * Holds a parameter at `value`, over motions, until `resetParameter`.
+   * The value is clamped to the parameter's range.
+   */
   setParameter(id: string, value: number): void
+  /** `setParameter` for each entry, under one lock: one call per frame of tracking data. */
+  setParameters(values: Record<string, number>): void
+  /** Releases a held parameter: motions and physics drive it again. */
   resetParameter(id: string): void
+  /** Releases every held parameter. */
+  resetParameters(): void
+  /**
+   * Eases held parameters towards their values with this time constant in seconds, so values
+   * set at a low rate (face tracking at 30 Hz) look smooth at the display's. 0 (default) applies
+   * them as they are.
+   */
+  setParameterSmoothing(seconds: number): void
+  /** Whether a random `Idle` motion starts whenever no motion plays. Default true. */
+  setIdleMotionEnabled(enabled: boolean): void
+  /** The parameter's current value, motions, physics and held values applied. 0 if there's none. */
+  getParameter(id: string): number
   focus(x: number, y: number): void
   resetFocus(): void
   /** Names of the `model3.json` hit areas at a point, e.g. `['Head', 'Body']`. */
   hitTest(x: number, y: number): string[]
   motionGroups: string[]
   expressionNames: string[]
+  /** The model's motions by group: what `motion(group, index)` can play. */
+  motions: Record<string, MotionInfo[]>
+  /** The model's expressions: what `expression(name)` can fade to. */
+  expressions: ExpressionInfo[]
+  /** Every parameter of the moc, with its range: what `setParameter` can hold. */
+  parameters: ParameterInfo[]
 
   /** Unique per loaded model: <Live2D>s showing the same model share its frames. */
   id: number
@@ -170,19 +202,36 @@ export async function loadLive2DModel(
       (canvas.originY - y) / canvas.pixelsPerUnit,
     ] as const
 
+  const parameters = parametersOf(source, native.getParameters())
+
   return {
     id: nextModelId++,
     motion: (group, index, priority) => native.startMotion(group, index, priority),
+    stopMotion: () => native.stopMotion(),
+    isMotionPlaying: () => native.isMotionPlaying(),
     expression: (name) => native.setExpression(name),
     resetExpression: () => native.clearExpression(),
+    // Native clamps to the range and ignores ids the model doesn't have.
     setParameter: (id, value) => native.setParameter(id, value),
+    setParameters: (values) => native.setParameters(Object.keys(values), Object.values(values)),
     resetParameter: (id) => native.clearParameter(id),
+    resetParameters: () => native.clearParameters(),
+    setParameterSmoothing: (seconds) => {
+      native.parameterSmoothing = seconds
+    },
+    setIdleMotionEnabled: (enabled) => {
+      native.idleMotionEnabled = enabled
+    },
+    getParameter: (id) => native.getParameterValue(id),
     // Relative to the canvas center, -1..1, y-up.
     focus: (x, y) => native.focus((x / width) * 2 - 1, 1 - (y / height) * 2),
     resetFocus: () => native.focus(0, 0),
     hitTest: (x, y) => native.hitTest(...toUnits(x, y)),
     motionGroups: Object.keys(source.motions ?? {}),
     expressionNames: Object.keys(source.expressions ?? {}),
+    motions: motionsOf(source),
+    expressions: expressionsOf(source),
+    parameters,
     native,
     picture: draw(),
     width,

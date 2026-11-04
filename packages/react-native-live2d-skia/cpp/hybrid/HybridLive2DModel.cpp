@@ -3,6 +3,7 @@
 #include <numeric>
 #include "CubismSetup.hpp"
 #include "CubismCompat.hpp"
+#include "CubismHelpers.hpp"
 
 namespace margelo::nitro::live2dskia {
 
@@ -106,6 +107,16 @@ bool HybridLive2DModel::startMotion(const std::string& group, std::optional<doub
     return _userModel->startMotion(group, static_cast<int>(*index), toPriority(priority));
 }
 
+void HybridLive2DModel::stopMotion() {
+    std::lock_guard lock(_mutex);
+    _userModel->stopMotion();
+}
+
+bool HybridLive2DModel::isMotionPlaying() {
+    std::lock_guard lock(_mutex);
+    return _userModel->isMotionPlaying();
+}
+
 void HybridLive2DModel::loadExpression(const std::string& name, const std::string& json) {
     std::lock_guard lock(_mutex);
     _userModel->loadExpression(name, json);
@@ -129,6 +140,59 @@ void HybridLive2DModel::setParameter(const std::string& id, double value) {
 void HybridLive2DModel::clearParameter(const std::string& id) {
     std::lock_guard lock(_mutex);
     _userModel->clearParameter(id);
+}
+
+std::vector<ParameterData> HybridLive2DModel::getParameters() {
+    std::lock_guard lock(_mutex);
+    auto* model = _userModel->model();
+    const int count = model->GetParameterCount();
+    std::vector<ParameterData> result;
+    result.reserve(count);
+    for (int i = 0; i < count; ++i) {
+        result.emplace_back(std::string(model->GetParameterId(i)->GetString().GetRawString()),
+                            model->GetParameterMinimumValue(i),
+                            model->GetParameterMaximumValue(i),
+                            model->GetParameterDefaultValue(i),
+                            model->GetParameterValue(i));
+    }
+    return result;
+}
+
+double HybridLive2DModel::getParameterValue(const std::string& id) {
+    std::lock_guard lock(_mutex);
+    auto* model = _userModel->model();
+    const int index = model->GetParameterIndex(idOf(id.c_str()));
+    return index < 0 ? 0.0 : model->GetParameterValue(index);
+}
+
+void HybridLive2DModel::setParameters(const std::vector<std::string>& ids, const std::vector<double>& values) {
+    std::lock_guard lock(_mutex);
+    _userModel->setParameters(ids, values);
+}
+
+void HybridLive2DModel::clearParameters() {
+    std::lock_guard lock(_mutex);
+    _userModel->clearParameters();
+}
+
+double HybridLive2DModel::getParameterSmoothing() {
+    std::lock_guard lock(_mutex);
+    return _userModel->parameterSmoothing();
+}
+
+void HybridLive2DModel::setParameterSmoothing(double seconds) {
+    std::lock_guard lock(_mutex);
+    _userModel->setParameterSmoothing(static_cast<float>(seconds));
+}
+
+bool HybridLive2DModel::getIdleMotionEnabled() {
+    std::lock_guard lock(_mutex);
+    return _userModel->idleMotionEnabled();
+}
+
+void HybridLive2DModel::setIdleMotionEnabled(bool enabled) {
+    std::lock_guard lock(_mutex);
+    _userModel->setIdleMotionEnabled(enabled);
 }
 
 void HybridLive2DModel::focus(double x, double y) {

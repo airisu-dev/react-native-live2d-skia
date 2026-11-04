@@ -6,3 +6,5 @@ export type {
 export { useLive2DGesture, useLive2DGestures } from './useLive2DGesture'
 export type { Live2DModelState } from './useLive2DModel'
 export { useLive2DModel } from './useLive2DModel'
+export type { Live2DParametersOptions } from './useLive2DParameters'
+export { useLive2DParameter, useLive2DParameters } from './useLive2DParameters'
