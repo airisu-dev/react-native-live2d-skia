@@ -1,20 +1,10 @@
 import type { CubismJson, Live2DModelSource } from './loadModel'
+import type { Model3Json } from './modelTypes'
 
 /** A Metro `require.context` of a model's folder; the path must be a string literal for Metro to bundle it. */
 export interface Live2DModelContext {
   keys(): string[]
   (id: string): unknown
-}
-
-export interface Model3Json {
-  FileReferences?: {
-    Moc?: string
-    Textures?: string[]
-    Physics?: string
-    Pose?: string
-    Motions?: Record<string, { File: string }[]>
-    Expressions?: { Name: string; File: string }[]
-  }
 }
 
 export function isModelContext(
@@ -76,5 +66,10 @@ export function sourceFromContext(context: Live2DModelContext): Live2DModelSourc
     expressions: Object.fromEntries(
       (refs.Expressions ?? []).map((e) => [e.Name, load<CubismJson>(e.File)]),
     ),
+    // Only names for the UI: a model works without it, so a filtered-out file is no error.
+    displayInfo:
+      refs.DisplayInfo && keys.includes(resolvePath(model3Key, refs.DisplayInfo))
+        ? load<CubismJson>(refs.DisplayInfo)
+        : undefined,
   }
 }

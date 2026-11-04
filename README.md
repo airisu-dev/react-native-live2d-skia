@@ -175,6 +175,9 @@ model.expression('exp_01') // expression; random without a name
 model.resetExpression()
 model.setParameter('ParamAngleX', 30) // held over motions until resetParameter
 model.resetParameter('ParamAngleX')
+model.resetParameters() // release every held parameter
+model.getParameter('ParamAngleX') // current value, motions and physics applied
+model.stopMotion()
 model.focus(x, y) // look at a point, easing
 model.resetFocus()
 model.hitTest(x, y) // → ['Head']
@@ -237,16 +240,21 @@ The same for one model: `options` is a target (without `model`) plus `focus`.
 
 ### `Live2DModel`
 
-| Member                                           | Description                                                                                                                   |
-| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| `motion(group, index?, priority?)`               | Plays a motion; `priority` is `'idle'`, `'normal'` or `'force'`. `false` if there is none or a higher priority one is playing |
-| `expression(name?)`                              | Fades to an expression, random without a name. `false` if there is none                                                       |
-| `resetExpression()`                              | Removes the current expression                                                                                                |
-| `setParameter(id, value)` / `resetParameter(id)` | Holds a parameter over motions until reset                                                                                    |
-| `focus(x, y)` / `resetFocus()`                   | Looks at a point, easing / looks straight ahead                                                                               |
-| `hitTest(x, y)`                                  | Names of the `model3.json` hit areas at a point                                                                               |
-| `motionGroups`, `expressionNames`                | What the model has                                                                                                            |
-| `width`, `height`                                | The model's native canvas size                                                                                                |
+| Member                                           | Description                                                                                                                                     |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `motion(group, index?, priority?)`               | Plays a motion; `priority` is `'idle'`, `'normal'` or `'force'`. `false` if there is none or a higher priority one is playing                   |
+| `expression(name?)`                              | Fades to an expression, random without a name. `false` if there is none                                                                         |
+| `resetExpression()`                              | Removes the current expression                                                                                                                  |
+| `setParameter(id, value)` / `resetParameter(id)` | Holds a parameter over motions until reset                                                                                                      |
+| `focus(x, y)` / `resetFocus()`                   | Looks at a point, easing / looks straight ahead                                                                                                 |
+| `hitTest(x, y)`                                  | Names of the `model3.json` hit areas at a point                                                                                                 |
+| `resetParameters()` / `getParameter(id)`         | Releases every held parameter / reads a parameter's current value                                                                               |
+| `stopMotion()` / `isMotionPlaying()`             | Stops the playing motion (an `Idle` one starts again) / whether one plays                                                                       |
+| `motions`                                        | `Record<group, MotionInfo[]>`: file, duration, loop and fades of each motion, from the model's files                                            |
+| `expressions`                                    | `ExpressionInfo[]`: name, file and the parameters each expression sets                                                                          |
+| `parameters`                                     | `ParameterInfo[]`: id, min, max, default, and the name and group from the model's `cdi3.json` if it has one. `setParameter` clamps to the range |
+| `motionGroups`, `expressionNames`                | The names in `motions` and `expressions`                                                                                                        |
+| `width`, `height`                                | The model's native canvas size                                                                                                                  |
 
 ## Contributing
 

@@ -71,6 +71,10 @@ Run installs and the shared scripts (`lint`, `typecheck`, `codegen`, `fetch:cubi
 
 ## Internals and gotchas
 
+### Changing the Nitro spec
+
+`src/specs/react-native-live2d-skia.nitro.ts` is the JS/C++ interface. After editing it, run `bun run codegen` from the root and commit the changes in `nitrogen/generated/` (CI doesn't regenerate it), then implement the new virtuals in `cpp/hybrid/HybridLive2DModel.*` and rebuild the native app (`bunx expo run:android` from an app's folder). Spec fields can't be named like C++ keywords (`default` is `defaultValue`).
+
 ### Premultiplied alpha
 
 Cubism expects premultiplied alpha. Make sure texture loading and the shader agree, otherwise edges get dark halos.

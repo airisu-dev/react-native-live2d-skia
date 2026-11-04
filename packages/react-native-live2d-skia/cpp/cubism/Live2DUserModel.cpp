@@ -1,4 +1,5 @@
 #include "Live2DUserModel.hpp"
+#include <algorithm>
 #include <stdexcept>
 #include "CubismDefaultParameterId.hpp"
 #include "CubismHelpers.hpp"
@@ -62,7 +63,7 @@ Live2DUserModel::Live2DUserModel(const uint8_t* moc, size_t mocSize, const std::
     _look->SetParameters(look);
     _updateScheduler.AddUpdatableList(CSM_NEW CubismLookUpdater(*_look, *_dragManager));
 
-    _updateScheduler.AddUpdatableList(CSM_NEW HeldParameterUpdater(_heldParameters));
+    _updateScheduler.AddUpdatableList(CSM_NEW HeldParameterUpdater(_heldParameters, _parameterSmoothing));
 
     _updateScheduler.SortUpdatableList();
     _model->SaveParameters();
@@ -82,11 +83,27 @@ Live2DUserModel::~Live2DUserModel() {
 }
 
 void Live2DUserModel::setParameter(const std::string& id, float value) {
-    _heldParameters[idOf(id.c_str())] = value;
+    const CubismIdHandle handle = idOf(id.c_str());
+    const csmInt32 index = _model->GetParameterIndex(handle);
+    if (index < 0) return;
+    const float clamped = std::min(_model->GetParameterMaximumValue(index), std::max(_model->GetParameterMinimumValue(index), value));
+    // Holding again keeps `current`, so a changing target is eased towards, not restarted.
+    _heldParameters[handle].target = clamped;
+}
+
+void Live2DUserModel::setParameters(const std::vector<std::string>& ids, const std::vector<double>& values) {
+    const size_t count = std::min(ids.size(), values.size());
+    for (size_t i = 0; i < count; ++i) {
+        setParameter(ids[i], static_cast<float>(values[i]));
+    }
 }
 
 void Live2DUserModel::clearParameter(const std::string& id) {
     _heldParameters.erase(idOf(id.c_str()));
+}
+
+void Live2DUserModel::clearParameters() {
+    _heldParameters.clear();
 }
 
 void Live2DUserModel::focus(float x, float y) {
@@ -110,7 +127,7 @@ void Live2DUserModel::update(float deltaSeconds) {
     _motionUpdated = false;
     _model->LoadParameters();
     if (_motionManager->IsFinished()) {
-        startRandomMotion("Idle", PriorityIdle);
+        if (_idleMotionEnabled) startRandomMotion("Idle", PriorityIdle);
     } else {
         _motionUpdated = _motionManager->UpdateMotion(_model, deltaSeconds);
     }

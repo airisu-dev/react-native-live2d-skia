@@ -68,6 +68,14 @@ bool Live2DUserModel::startRandomMotion(const std::string& group, Priority prior
     return startMotion(group, std::rand() % count, priority);
 }
 
+void Live2DUserModel::stopMotion() {
+    _motionManager->StopAllMotions();
+}
+
+bool Live2DUserModel::isMotionPlaying() {
+    return !_motionManager->IsFinished();
+}
+
 void Live2DUserModel::loadExpression(const std::string& name, const std::string& json) {
     requireValidJson(json, "exp3.json for " + name);
     ACubismMotion* expression = LoadExpression(bytesOf(json), static_cast<csmSizeInt>(json.size()), name.c_str());

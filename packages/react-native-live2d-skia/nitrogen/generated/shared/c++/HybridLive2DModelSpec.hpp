@@ -17,12 +17,15 @@
 namespace margelo::nitro::live2dskia { struct DrawableData; }
 // Forward declaration of `MotionPriority` to properly resolve imports.
 namespace margelo::nitro::live2dskia { enum class MotionPriority; }
+// Forward declaration of `ParameterData` to properly resolve imports.
+namespace margelo::nitro::live2dskia { struct ParameterData; }
 
 #include "DrawableData.hpp"
 #include <vector>
 #include <string>
 #include <optional>
 #include "MotionPriority.hpp"
+#include "ParameterData.hpp"
 
 namespace margelo::nitro::live2dskia {
 
@@ -57,6 +60,10 @@ namespace margelo::nitro::live2dskia {
       virtual double getOriginY() = 0;
       virtual double getPixelsPerUnit() = 0;
       virtual double getDrawableCount() = 0;
+      virtual double getParameterSmoothing() = 0;
+      virtual void setParameterSmoothing(double parameterSmoothing) = 0;
+      virtual bool getIdleMotionEnabled() = 0;
+      virtual void setIdleMotionEnabled(bool idleMotionEnabled) = 0;
 
     public:
       // Methods
@@ -65,11 +72,17 @@ namespace margelo::nitro::live2dskia {
       virtual void loadPose(const std::string& json) = 0;
       virtual void loadMotion(const std::string& group, double index, const std::string& json) = 0;
       virtual bool startMotion(const std::string& group, std::optional<double> index, std::optional<MotionPriority> priority) = 0;
+      virtual void stopMotion() = 0;
+      virtual bool isMotionPlaying() = 0;
       virtual void loadExpression(const std::string& name, const std::string& json) = 0;
       virtual bool setExpression(const std::optional<std::string>& name) = 0;
       virtual void clearExpression() = 0;
       virtual void setParameter(const std::string& id, double value) = 0;
       virtual void clearParameter(const std::string& id) = 0;
+      virtual void setParameters(const std::vector<std::string>& ids, const std::vector<double>& values) = 0;
+      virtual void clearParameters() = 0;
+      virtual std::vector<ParameterData> getParameters() = 0;
+      virtual double getParameterValue(const std::string& id) = 0;
       virtual void focus(double x, double y) = 0;
       virtual std::vector<std::string> hitTest(double x, double y) = 0;
       virtual void update(double deltaSeconds) = 0;
