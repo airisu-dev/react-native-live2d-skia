@@ -10,11 +10,15 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@airisu-dev/react-native-live2d-skia": "workspace:*",
+    "@expo/ui": "~57.0.26",
+    "@expo/vector-icons": "^15.0.2",
     "@react-native-feel/deploy": "^0.3.0",
     "expo": "~57.0.27",
     "expo-asset": "~57.0.19",
     "expo-build-properties": "^57.0.22",
     "expo-dev-client": "~57.0.19",
+    "expo-document-picker": "~57.0.3",
     "expo-file-system": "~57.0.7",
     "expo-router": "~57.0.25",
     "expo-splash-screen": "~57.0.9",
@@ -25,14 +29,13 @@
     "react-native": "0.86.3",
     "react-native-gesture-handler": "~2.32.0",
     "react-native-nitro-modules": "^0.37.1",
+    "react-native-nitro-unzip": "^0.6.0",
     "react-native-reanimated": "4.5.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
     "react-native-skia": "^3.3.0",
     "react-native-web": "~0.21.0",
-    "react-native-worklets": "0.10.1",
-    "@airisu-dev/react-native-live2d-skia": "workspace:*",
-    "react-native-live2d-skia-demo": "workspace:*"
+    "react-native-worklets": "0.10.1"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
