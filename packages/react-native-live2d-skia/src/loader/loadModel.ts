@@ -86,6 +86,8 @@ export interface Live2DModel {
   setParameterSmoothing(seconds: number): void
   /** Whether a random `Idle` motion starts whenever no motion plays. Default true. */
   setIdleMotionEnabled(enabled: boolean): void
+  /** Whether the eyes blink, for models with eye blink parameters. Default true. */
+  setEyeBlinkEnabled(enabled: boolean): void
   /** The parameter's current value, motions, physics and held values applied. 0 if there's none. */
   getParameter(id: string): number
   focus(x: number, y: number): void
@@ -153,7 +155,7 @@ let nextModelId = 1
 /**
  * Loads a model from its files, from a `require.context` of its folder, or
  * from the URL of its `model3.json` (the files it lists are fetched next to it).
- * `options` apply to every remote file.
+ * `options.headers` and `options.resolveUrl` apply to every remote file.
  */
 export async function loadLive2DModel(
   input: Live2DModelSource | Live2DModelContext | string,
@@ -180,7 +182,10 @@ export async function loadLive2DModel(
   for (const [name, expression] of Object.entries(source.expressions ?? {})) {
     native.loadExpression(name, toCubismJson(expression))
   }
-  // Apply the pose and the first idle motion's starting state.
+  // Before the first update, which would otherwise already start an idle motion.
+  native.idleMotionEnabled = options.idleMotion ?? true
+  native.eyeBlinkEnabled = options.eyeBlink ?? true
+  // Apply the pose and, with idle motions on, the first one's starting state.
   native.update(0)
 
   // Trilinear: models are usually drawn far smaller than their 2048px textures,
@@ -228,6 +233,9 @@ export async function loadLive2DModel(
     },
     setIdleMotionEnabled: (enabled) => {
       native.idleMotionEnabled = enabled
+    },
+    setEyeBlinkEnabled: (enabled) => {
+      native.eyeBlinkEnabled = enabled
     },
     getParameter: (id) => native.getParameterValue(id),
     // Relative to the canvas center, -1..1, y-up.

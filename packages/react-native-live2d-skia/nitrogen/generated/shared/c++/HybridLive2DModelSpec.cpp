@@ -24,6 +24,8 @@ namespace margelo::nitro::live2dskia {
       prototype.registerHybridSetter("parameterSmoothing", &HybridLive2DModelSpec::setParameterSmoothing);
       prototype.registerHybridGetter("idleMotionEnabled", &HybridLive2DModelSpec::getIdleMotionEnabled);
       prototype.registerHybridSetter("idleMotionEnabled", &HybridLive2DModelSpec::setIdleMotionEnabled);
+      prototype.registerHybridGetter("eyeBlinkEnabled", &HybridLive2DModelSpec::getEyeBlinkEnabled);
+      prototype.registerHybridSetter("eyeBlinkEnabled", &HybridLive2DModelSpec::setEyeBlinkEnabled);
       prototype.registerHybridMethod("getDrawables", &HybridLive2DModelSpec::getDrawables);
       prototype.registerHybridMethod("loadPhysics", &HybridLive2DModelSpec::loadPhysics);
       prototype.registerHybridMethod("loadPose", &HybridLive2DModelSpec::loadPose);

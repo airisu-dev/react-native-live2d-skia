@@ -40,6 +40,8 @@ class HybridLive2DModel : public HybridLive2DModelSpec {
         void setParameterSmoothing(double seconds) override;
         bool getIdleMotionEnabled() override;
         void setIdleMotionEnabled(bool enabled) override;
+        bool getEyeBlinkEnabled() override;
+        void setEyeBlinkEnabled(bool enabled) override;
         std::vector<ParameterData> getParameters() override;
         double getParameterValue(const std::string& id) override;
         void focus(double x, double y) override;

@@ -200,6 +200,16 @@ void HybridLive2DModel::setIdleMotionEnabled(bool enabled) {
     _userModel->setIdleMotionEnabled(enabled);
 }
 
+bool HybridLive2DModel::getEyeBlinkEnabled() {
+    std::lock_guard lock(_mutex);
+    return _userModel->eyeBlinkEnabled();
+}
+
+void HybridLive2DModel::setEyeBlinkEnabled(bool enabled) {
+    std::lock_guard lock(_mutex);
+    _userModel->setEyeBlinkEnabled(enabled);
+}
+
 void HybridLive2DModel::focus(double x, double y) {
     std::lock_guard lock(_mutex);
     _userModel->focus(static_cast<float>(std::clamp(x, -1.0, 1.0)), static_cast<float>(std::clamp(y, -1.0, 1.0)));

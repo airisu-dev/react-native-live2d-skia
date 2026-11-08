@@ -48,6 +48,9 @@ class Live2DUserModel : public csm::CubismUserModel {
         // Whether a random Idle motion starts whenever no motion plays.
         bool idleMotionEnabled() const { return _idleMotionEnabled; }
         void setIdleMotionEnabled(bool enabled) { _idleMotionEnabled = enabled; }
+        // Whether the eyes blink (models with eye blink parameters only).
+        bool eyeBlinkEnabled() const { return _eyeBlinkEnabled; }
+        void setEyeBlinkEnabled(bool enabled) { _eyeBlinkEnabled = enabled; }
         // -1..1 on each axis, y-up.
         void focus(float x, float y);
         // Hit area names containing the point (model units, y-up).
@@ -66,11 +69,14 @@ class Live2DUserModel : public csm::CubismUserModel {
         std::map<csm::CubismIdHandle, HeldParameter> _heldParameters;
         float _parameterSmoothing = 0;
         bool _idleMotionEnabled = true;
+        bool _eyeBlinkEnabled = true;
         // Seconds left of a resetPose fade, 0 when none runs.
         float _poseResetRemaining = 0;
         void easeToDefaultPose(float deltaSeconds);
         // Read by the eye blink updater: no blinking while a motion moves the eyes.
         csm::csmBool _motionUpdated = false;
+        // Read by the eye blink updater: set while a motion moves the eyes or blinking is off.
+        csm::csmBool _skipEyeBlink = false;
 };
 
 } // namespace margelo::nitro::live2dskia

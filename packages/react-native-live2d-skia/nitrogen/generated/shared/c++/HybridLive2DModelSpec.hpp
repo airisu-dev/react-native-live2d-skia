@@ -64,6 +64,8 @@ namespace margelo::nitro::live2dskia {
       virtual void setParameterSmoothing(double parameterSmoothing) = 0;
       virtual bool getIdleMotionEnabled() = 0;
       virtual void setIdleMotionEnabled(bool idleMotionEnabled) = 0;
+      virtual bool getEyeBlinkEnabled() = 0;
+      virtual void setEyeBlinkEnabled(bool eyeBlinkEnabled) = 0;
 
     public:
       // Methods
