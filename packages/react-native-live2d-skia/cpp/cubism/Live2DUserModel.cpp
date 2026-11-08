@@ -37,7 +37,7 @@ Live2DUserModel::Live2DUserModel(const uint8_t* moc, size_t mocSize, const std::
 
     if (_eyeBlinkIds.GetSize() > 0) {
         _eyeBlink = CubismEyeBlink::Create(_setting);
-        _updateScheduler.AddUpdatableList(CSM_NEW CubismEyeBlinkUpdater(_motionUpdated, *_eyeBlink));
+        _updateScheduler.AddUpdatableList(CSM_NEW CubismEyeBlinkUpdater(_skipEyeBlink, *_eyeBlink));
     }
 
     _breath = CubismBreath::Create();
@@ -137,6 +137,7 @@ void Live2DUserModel::update(float deltaSeconds) {
 
     // Eye blink (unless a motion moved the eyes), expression, look, breath,
     // held parameters, physics, pose.
+    _skipEyeBlink = _motionUpdated || !_eyeBlinkEnabled;
     _updateScheduler.OnLateUpdate(_model, deltaSeconds);
     _model->Update();
 }

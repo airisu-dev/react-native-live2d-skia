@@ -98,6 +98,8 @@ export interface Live2DModel extends HybridObject<{ ios: 'c++'; android: 'c++' }
    * to drive the model with parameters only.
    */
   idleMotionEnabled: boolean
+  /** Whether the eyes blink, for models with eye blink parameters. Default true. */
+  eyeBlinkEnabled: boolean
   /** Every parameter of the moc, in its order, with its range and current value. */
   getParameters(): ParameterData[]
   /** The current value of a parameter, 0 if there's no such parameter. */

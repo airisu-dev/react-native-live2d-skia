@@ -14,6 +14,16 @@ export interface Live2DLoadOptions {
    * reuses the `model3.json` URL's query (e.g. a token) for files on its host.
    */
   resolveUrl?: (url: string, file: string) => string | Promise<string>
+  /**
+   * Whether a random `Idle` motion starts whenever no motion plays, from the first frame.
+   * Default true; `model.setIdleMotionEnabled` changes it later.
+   */
+  idleMotion?: boolean
+  /**
+   * Whether the eyes blink, for models with eye blink parameters. Default true;
+   * `model.setEyeBlinkEnabled` changes it later.
+   */
+  eyeBlink?: boolean
 }
 
 const ABSOLUTE = /^[a-z][a-z0-9+.-]*:\/\//i

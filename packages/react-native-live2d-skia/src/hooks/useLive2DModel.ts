@@ -13,7 +13,7 @@ export interface Live2DModelState {
   retry: () => void
 }
 
-/** Loads a model on mount. `options` apply to remote files (see `Live2DLoadOptions`). */
+/** Loads a model on mount, with `options` (see `Live2DLoadOptions`). */
 export function useLive2DModel(
   source: Live2DModelSource | Live2DModelContext | string,
   options?: Live2DLoadOptions,

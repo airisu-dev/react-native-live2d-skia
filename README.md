@@ -215,7 +215,7 @@ model.native.setParameters(['ParamAngleX', 'ParamEyeLOpen'], [yaw * 30, leftEyeO
 - Values are clamped to each parameter's range, and ids the model doesn't have are ignored.
 - Trackers deliver 15-30 values a second and the display shows 60 frames: `smoothing` (a time constant in seconds, `model.setParameterSmoothing(0.08)`) eases held parameters towards their values in between.
 - Typical mapping: head yaw, pitch and roll to `ParamAngleX`, `ParamAngleY` and `ParamAngleZ` (about ±30°, mirrored for a front camera), eye openness to `ParamEyeLOpen` and `ParamEyeROpen`, mouth openness to `ParamMouthOpenY`, smile to `ParamMouthForm`.
-- `model.setIdleMotionEnabled(false)` stops the random `Idle` motions that start whenever nothing plays, so only your values drive the model. Call `model.resetParameters()` when the face is lost, and the model's own motions take over again.
+- `useLive2DModel(source, { idleMotion: false })` (or `model.setIdleMotionEnabled(false)` later) stops the random `Idle` motions that start whenever nothing plays, so only your values drive the model. Call `model.resetParameters()` when the face is lost, and the model's own motions take over again.
 
 ## API
 
@@ -234,6 +234,8 @@ model.native.setParameters(['ParamAngleX', 'ParamEyeLOpen'], [yaw * 30, leftEyeO
 | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `headers`    | Sent with every request for a remote file                                                                                                                                                                                                          |
 | `resolveUrl` | `(url, file) => string \| Promise<string>`: the URL to request for each file the `model3.json` lists. `url` is resolved next to it without a query, `file` is the path as listed. Replaces the default, which reuses the `model3.json` URL's query |
+| `idleMotion` | Whether a random `Idle` motion starts whenever nothing plays, from the first frame. Default `true`; `model.setIdleMotionEnabled` changes it later                                                                                                  |
+| `eyeBlink`   | Whether the eyes blink, for models with eye blink parameters. Default `true`; `model.setEyeBlinkEnabled` changes it later                                                                                                                          |
 
 ### `<Live2D />`
 
@@ -287,6 +289,7 @@ Holds parameters at the values of a `SharedValue<Record<string, number>>` as it 
 | `setParameters(values)`                          | `setParameter` for each entry of a `{ id: value }` object, in one locked call                                                                   |
 | `setParameterSmoothing(seconds)`                 | Eases held parameters towards their values; `0` (default) applies them as they are                                                              |
 | `setIdleMotionEnabled(enabled)`                  | Whether a random `Idle` motion starts when nothing plays. Default `true`                                                                        |
+| `setEyeBlinkEnabled(enabled)`                    | Whether the eyes blink, for models with eye blink parameters. Default `true`                                                                    |
 | `resetParameters()` / `getParameter(id)`         | Releases every held parameter / reads a parameter's current value                                                                               |
 | `stopMotion()` / `isMotionPlaying()`             | Stops the playing motion (an `Idle` one starts again) / whether one plays                                                                       |
 | `resetPose(fadeSeconds?)`                        | Stops the playing motion and eases every parameter to its default (0.5 s by default); held parameters stay on top                               |
