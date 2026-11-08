@@ -74,6 +74,7 @@ namespace margelo::nitro::live2dskia {
       virtual bool startMotion(const std::string& group, std::optional<double> index, std::optional<MotionPriority> priority) = 0;
       virtual void stopMotion() = 0;
       virtual bool isMotionPlaying() = 0;
+      virtual void resetPose(std::optional<double> fadeSeconds) = 0;
       virtual void loadExpression(const std::string& name, const std::string& json) = 0;
       virtual bool setExpression(const std::optional<std::string>& name) = 0;
       virtual void clearExpression() = 0;

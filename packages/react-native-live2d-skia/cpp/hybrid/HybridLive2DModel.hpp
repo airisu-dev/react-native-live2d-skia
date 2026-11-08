@@ -28,6 +28,7 @@ class HybridLive2DModel : public HybridLive2DModelSpec {
         bool startMotion(const std::string& group, std::optional<double> index, std::optional<MotionPriority> priority) override;
         void stopMotion() override;
         bool isMotionPlaying() override;
+        void resetPose(std::optional<double> fadeSeconds) override;
         void loadExpression(const std::string& name, const std::string& json) override;
         bool setExpression(const std::optional<std::string>& name) override;
         void clearExpression() override;
