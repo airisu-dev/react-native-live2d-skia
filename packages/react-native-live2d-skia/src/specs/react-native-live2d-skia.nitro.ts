@@ -19,6 +19,17 @@ export interface DrawableData {
   indices: ArrayBuffer
 }
 
+export interface ParameterData {
+  /** Cubism parameter id, e.g. `ParamAngleX`. */
+  id: string
+  min: number
+  max: number
+  /** The parameter's value when nothing drives it. */
+  defaultValue: number
+  /** The value after the last update: motions, expression, physics and held values applied. */
+  value: number
+}
+
 /** Like the Cubism SDK samples: a higher priority interrupts a lower one. */
 export type MotionPriority = 'idle' | 'normal' | 'force'
 
@@ -47,6 +58,10 @@ export interface Live2DModel extends HybridObject<{ ios: 'c++'; android: 'c++' }
    * Returns false if it isn't loaded or a higher priority motion is playing.
    */
   startMotion(group: string, index?: number, priority?: MotionPriority): boolean
+  /** Stops the playing motion. A random `Idle` motion starts again on the next update. */
+  stopMotion(): void
+  /** Whether a motion, idle ones included, is playing. */
+  isMotionPlaying(): boolean
   loadExpression(name: string, json: string): void
   /**
    * Fades to a loaded expression, or a random one without `name`.
@@ -60,6 +75,28 @@ export interface Live2DModel extends HybridObject<{ ios: 'c++'; android: 'c++' }
    */
   setParameter(id: string, value: number): void
   clearParameter(id: string): void
+  /**
+   * Holds several parameters at once, like `setParameter` for each id with the value at the
+   * same index, under one lock: one call per frame of e.g. face tracking data.
+   */
+  setParameters(ids: string[], values: number[]): void
+  /** Releases every held parameter. */
+  clearParameters(): void
+  /**
+   * Time constant in seconds with which held parameters ease towards their value, so values set
+   * at a low rate (face tracking at 30 Hz) look smooth at the display's. 0 (default) applies
+   * them as they are.
+   */
+  parameterSmoothing: number
+  /**
+   * Whether a random `Idle` motion starts whenever no motion plays. Default true. Turn it off
+   * to drive the model with parameters only.
+   */
+  idleMotionEnabled: boolean
+  /** Every parameter of the moc, in its order, with its range and current value. */
+  getParameters(): ParameterData[]
+  /** The current value of a parameter, 0 if there's no such parameter. */
+  getParameterValue(id: string): number
   /**
    * Makes the model look at a point, easing towards it: -1..1 on each axis,
    * y-up, (0, 0) is straight ahead.

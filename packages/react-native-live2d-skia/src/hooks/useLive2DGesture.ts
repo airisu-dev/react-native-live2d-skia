@@ -1,12 +1,14 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import { Gesture } from 'react-native-gesture-handler'
+import type { SharedValue } from 'react-native-reanimated'
 import type { Live2DModel } from '../loader/loadModel'
 
 export interface Live2DGestureTarget {
   model: Live2DModel | null
-  x?: number
-  y?: number
-  scale?: number
+  /** Where the model is drawn: numbers, or the shared values given to `<Live2D>`. */
+  x?: number | SharedValue<number>
+  y?: number | SharedValue<number>
+  scale?: number | SharedValue<number>
   /**
    * Called with the hit areas under a tap. Return true to skip the default
    * reaction: a `Tap<area>` motion, else a random expression for `Head`, else a `Tap` motion.
@@ -43,8 +45,12 @@ function react(model: Live2DModel, hitAreas: string[]) {
 
 const LONG_PRESS_MS = 350
 
+const current = (value: number | SharedValue<number>) =>
+  typeof value === 'number' ? value : value.get()
+
 function toModel({ x = 0, y = 0, scale = 1 }: Live2DGestureTarget, px: number, py: number) {
-  return [(px - x) / scale, (py - y) / scale] as const
+  const s = current(scale)
+  return [(px - current(x)) / s, (py - current(y)) / s] as const
 }
 
 function topmostHit(targets: Live2DGestureTarget[], px: number, py: number) {
@@ -115,7 +121,7 @@ export function useLive2DGestures(
         const hit = topmostHit(latest.current, e.x, e.y)
         if (!hit?.target.onMove) return
         const { model, x = 0, y = 0 } = hit.target
-        drag.current = { model: model!, dx: e.x - x, dy: e.y - y }
+        drag.current = { model: model!, dx: e.x - current(x), dy: e.y - current(y) }
       })
       .onUpdate((e) => {
         if (!drag.current) return

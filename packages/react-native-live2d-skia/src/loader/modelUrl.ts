@@ -1,6 +1,7 @@
 import { fetch } from 'expo/fetch'
 import type { CubismJson, Live2DModelSource } from './loadModel'
-import { type Model3Json, resolvePath } from './modelContext'
+import { resolvePath } from './modelContext'
+import type { Model3Json } from './modelTypes'
 
 /** How remote model files are requested. */
 export interface Live2DLoadOptions {
@@ -89,13 +90,15 @@ export async function sourceFromUrl(
   const json = async (file: string) => fetchJson<CubismJson>(await resolve(file), options)
 
   const motionGroups = Object.entries(refs.Motions ?? {})
-  const [moc, textures, physics, pose, motions, expressions] = await Promise.all([
+  const [moc, textures, physics, pose, motions, expressions, displayInfo] = await Promise.all([
     resolve(refs.Moc),
     Promise.all((refs.Textures ?? []).map(resolve)),
     refs.Physics ? json(refs.Physics) : undefined,
     refs.Pose ? json(refs.Pose) : undefined,
     Promise.all(motionGroups.map(([, list]) => Promise.all(list.map((m) => json(m.File))))),
     Promise.all((refs.Expressions ?? []).map((e) => json(e.File))),
+    // Only names for the UI: a model works without it.
+    refs.DisplayInfo ? json(refs.DisplayInfo).catch(() => undefined) : undefined,
   ])
 
   return {
@@ -108,5 +111,6 @@ export async function sourceFromUrl(
     expressions: Object.fromEntries(
       (refs.Expressions ?? []).map((e, i) => [e.Name, expressions[i]!]),
     ),
+    displayInfo,
   }
 }

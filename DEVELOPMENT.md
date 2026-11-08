@@ -6,7 +6,7 @@ Notes for working on this repo. For installation and usage, see the [README](./R
 
 A Bun workspace:
 - `packages/react-native-live2d-skia/`: the library, published to npm as `@airisu-dev/react-native-live2d-skia`.
-- `packages/demo/`: the demo screens (private), shared by the apps.
+- `packages/demo/`: the demo screens (private), shared by the apps. A single model also gets a controls panel (`src/components/`): expression and motion pickers and parameter sliders, built on `Live2DModel.expressions`, `.motions` and `.parameters`.
 - `apps/app/`: the full-featured demo app, on Skia v3 (`react-native-skia`). It uses the library like any other app: a `workspace:*` dependency and the `@airisu-dev/react-native-live2d-skia` config plugin in its `app.json`. It also owns the shared assets and the Cubism SDK folder (`vendor/`).
 - `apps/app-skia3/`: the demo on Skia v3 (`react-native-skia`), the counterpart of `apps/app-skia2/`. It reuses `apps/app`'s assets and Cubism SDK folder.
 - `apps/app-skia2/`: the demo on Skia v2 (`@shopify/react-native-skia`). It shares the first app's EAS project, bundle id and Cubism SDK folder, so installing any of the three replaces the others on a device.
@@ -22,7 +22,7 @@ Run installs and the shared scripts (`lint`, `typecheck`, `codegen`, `fetch:cubi
    bun run fetch:cubism
    ```
 
-   It runs `@airisu-dev/react-native-live2d-skia fetch-sdk`, which downloads the official zip, checks its SHA-256, and extracts it to `apps/app/vendor/CubismSdkForNative/`. That gives the proprietary Core and the Cubism Native Framework source, which the native builds compile; the demo's `app.json` points the `@airisu-dev/react-native-live2d-skia` config plugin at that folder. It also copies the Hiyori and Mao samples to `apps/app/assets/live2d/`. Both folders are gitignored and never committed. CI runs the same script.
+   It runs `@airisu-dev/react-native-live2d-skia fetch-sdk`, which downloads the official zip, checks its SHA-256, and extracts it to `apps/app/vendor/CubismSdkForNative/`. That gives the proprietary Core and the Cubism Native Framework source, which the native builds compile; the demo's `app.json` points the `@airisu-dev/react-native-live2d-skia` config plugin at that folder. It also copies the Hiyori and Mao samples to `packages/demo/assets/live2d/`. Both folders are gitignored and never committed. CI runs the same script.
 
 2. Install and run on Android (development build; Expo Go won't work):
 
@@ -70,6 +70,10 @@ Run installs and the shared scripts (`lint`, `typecheck`, `codegen`, `fetch:cubi
 | Opacity                 | paint alpha / color in shader                                                            |
 
 ## Internals and gotchas
+
+### Changing the Nitro spec
+
+`src/specs/react-native-live2d-skia.nitro.ts` is the JS/C++ interface. After editing it, run `bun run codegen` from the root and commit the changes in `nitrogen/generated/` (CI doesn't regenerate it), then implement the new virtuals in `cpp/hybrid/HybridLive2DModel.*` and rebuild the native app (`bunx expo run:android` from an app's folder). Spec fields can't be named like C++ keywords (`default` is `defaultValue`).
 
 ### Premultiplied alpha
 

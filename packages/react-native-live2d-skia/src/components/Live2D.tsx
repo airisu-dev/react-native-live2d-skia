@@ -1,5 +1,10 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { useFrameCallback, useSharedValue } from 'react-native-reanimated'
+import {
+  type SharedValue,
+  useDerivedValue,
+  useFrameCallback,
+  useSharedValue,
+} from 'react-native-reanimated'
 import {
   createSynchronizable,
   createWorkletRuntime,
@@ -12,13 +17,16 @@ import { addToTicker, type Live2DFrameStats, type PublishedFrame } from '../rend
 
 export type { Live2DFrameStats } from '../rendering/ticker'
 
+/** A number, or a Reanimated shared value of one: animating it needs no React render. */
+export type Live2DValue = number | SharedValue<number>
+
 export interface Live2DProps {
   model: Live2DModel | null
   /** Top-left position on the canvas. */
-  x?: number
-  y?: number
+  x?: Live2DValue
+  y?: Live2DValue
   /** Uniform scale of the model's native canvas size. */
-  scale?: number
+  scale?: Live2DValue
   /** Stops animating and keeps the current frame. */
   paused?: boolean
   /** Caps the frame rate, e.g. 30 to save battery. Default: the display's refresh rate. */
@@ -28,6 +36,11 @@ export interface Live2DProps {
 }
 
 const DISPLAY_SAMPLE_FRAMES = 60
+
+const read = (value: Live2DValue) => {
+  'worklet'
+  return typeof value === 'number' ? value : value.value
+}
 
 // Shown until the model loads. A recorder must begin recording before it can finish.
 const emptyRecorder = Skia.PictureRecorder()
@@ -48,7 +61,16 @@ export function Live2D({
   maxFps,
   onFrameStats,
 }: Live2DProps) {
-  // A shared value lets Skia redraw each frame without a React re-render.
+  // Shared values let Skia redraw each frame, and move the model, without a React re-render.
+  const transform = useDerivedValue<Record<string, number>[]>(() => {
+    'worklet'
+    const t: Record<string, number>[] = [
+      { translateX: read(x) },
+      { translateY: read(y) },
+      { scale: read(scale) },
+    ]
+    return t
+  })
   const picture = useSharedValue<SkPicture>(model?.picture ?? EMPTY_PICTURE)
   // Reset to the load-time frame only when the model changes, so pausing keeps the current frame.
   const shownModel = useRef<Live2DModel | null>(null)
@@ -124,7 +146,7 @@ export function Live2D({
 
   if (!model) return null
   return (
-    <Group transform={[{ translateX: x }, { translateY: y }, { scale }]}>
+    <Group transform={transform}>
       <Picture picture={picture} />
     </Group>
   )
