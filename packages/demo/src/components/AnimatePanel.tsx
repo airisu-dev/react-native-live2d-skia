@@ -79,8 +79,13 @@ export function AnimatePanel({ model }: { model: Live2DModel }) {
 
   // 1. The UI thread: a frame callback writes a shared value, useLive2DParameters passes it on.
   const values = useSharedValue<Record<string, number>>({})
-  const frame = useFrameCallback(({ timeSinceFirstFrame }) => {
-    values.value = pose(timeSinceFirstFrame / 1000)
+  // The clock is a shared start time, not the callback's own `timeSinceFirstFrame`: the callback is
+  // registered again whenever the panel re-renders (the JS frame rate readout does, every second),
+  // which restarts that clock and would snap the pose back to its start.
+  const startedAt = useSharedValue(0)
+  const frame = useFrameCallback(({ timestamp }) => {
+    if (startedAt.value === 0) startedAt.value = timestamp
+    values.value = pose((timestamp - startedAt.value) / 1000)
   }, false)
   const ui = on && source === 'ui'
   useEffect(() => {
