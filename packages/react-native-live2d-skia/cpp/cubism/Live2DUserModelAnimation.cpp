@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <iterator>
 #include <stdexcept>
+#include <vector>
 #include "CubismHelpers.hpp"
 #include "Motion/CubismMotion.hpp"
 #include "Motion/CubismPhysicsUpdater.hpp"
@@ -74,6 +75,43 @@ void Live2DUserModel::stopMotion() {
 
 bool Live2DUserModel::isMotionPlaying() {
     return !_motionManager->IsFinished();
+}
+
+void Live2DUserModel::resetPose(float fadeSeconds) {
+    _motionManager->StopAllMotions();
+    // Motions also switch pose parts (Hiyori's raised arm is PartArmB) through per-part values
+    // that aren't model parameters. Reset puts back the first part of each group; restoring the
+    // opacities it set lets the pose fade to that part instead of popping.
+    if (_pose) {
+        const csmInt32 partCount = _model->GetPartCount();
+        std::vector<csmFloat32> opacities(static_cast<size_t>(partCount));
+        for (csmInt32 i = 0; i < partCount; ++i) opacities[i] = _model->GetPartOpacity(i);
+        _pose->Reset(_model);
+        if (fadeSeconds > 0) {
+            for (csmInt32 i = 0; i < partCount; ++i) _model->SetPartOpacity(i, opacities[i]);
+        }
+    }
+    // update() starts each frame from the saved parameters, so a stopped motion alone
+    // leaves the model frozen in its last pose: move those towards the defaults instead.
+    if (fadeSeconds > 0) {
+        _poseResetRemaining = fadeSeconds;
+        return;
+    }
+    _poseResetRemaining = 0;
+    for (csmInt32 i = 0; i < _model->GetParameterCount(); ++i) {
+        _model->SetParameterValue(i, _model->GetParameterDefaultValue(i));
+    }
+    _model->SaveParameters();
+}
+
+void Live2DUserModel::easeToDefaultPose(float deltaSeconds) {
+    // Linear in time: each frame covers its share of what is left, so it lands at the end.
+    const float t = deltaSeconds >= _poseResetRemaining ? 1.0f : deltaSeconds / _poseResetRemaining;
+    for (csmInt32 i = 0; i < _model->GetParameterCount(); ++i) {
+        const float value = _model->GetParameterValue(i);
+        _model->SetParameterValue(i, value + (_model->GetParameterDefaultValue(i) - value) * t);
+    }
+    _poseResetRemaining = t >= 1.0f ? 0 : _poseResetRemaining - deltaSeconds;
 }
 
 void Live2DUserModel::loadExpression(const std::string& name, const std::string& json) {

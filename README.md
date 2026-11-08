@@ -289,6 +289,7 @@ Holds parameters at the values of a `SharedValue<Record<string, number>>` as it 
 | `setIdleMotionEnabled(enabled)`                  | Whether a random `Idle` motion starts when nothing plays. Default `true`                                                                        |
 | `resetParameters()` / `getParameter(id)`         | Releases every held parameter / reads a parameter's current value                                                                               |
 | `stopMotion()` / `isMotionPlaying()`             | Stops the playing motion (an `Idle` one starts again) / whether one plays                                                                       |
+| `resetPose(fadeSeconds?)`                        | Stops the playing motion and eases every parameter to its default (0.5 s by default); held parameters stay on top                               |
 | `motions`                                        | `Record<group, MotionInfo[]>`: file, duration, loop and fades of each motion, from the model's files                                            |
 | `expressions`                                    | `ExpressionInfo[]`: name, file and the parameters each expression sets                                                                          |
 | `parameters`                                     | `ParameterInfo[]`: id, min, max, default, and the name and group from the model's `cdi3.json` if it has one. `setParameter` clamps to the range |

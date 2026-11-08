@@ -31,6 +31,7 @@ namespace margelo::nitro::live2dskia {
       prototype.registerHybridMethod("startMotion", &HybridLive2DModelSpec::startMotion);
       prototype.registerHybridMethod("stopMotion", &HybridLive2DModelSpec::stopMotion);
       prototype.registerHybridMethod("isMotionPlaying", &HybridLive2DModelSpec::isMotionPlaying);
+      prototype.registerHybridMethod("resetPose", &HybridLive2DModelSpec::resetPose);
       prototype.registerHybridMethod("loadExpression", &HybridLive2DModelSpec::loadExpression);
       prototype.registerHybridMethod("setExpression", &HybridLive2DModelSpec::setExpression);
       prototype.registerHybridMethod("clearExpression", &HybridLive2DModelSpec::clearExpression);

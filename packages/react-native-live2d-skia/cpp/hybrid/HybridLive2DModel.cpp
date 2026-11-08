@@ -117,6 +117,11 @@ bool HybridLive2DModel::isMotionPlaying() {
     return _userModel->isMotionPlaying();
 }
 
+void HybridLive2DModel::resetPose(std::optional<double> fadeSeconds) {
+    std::lock_guard lock(_mutex);
+    _userModel->resetPose(static_cast<float>(fadeSeconds.value_or(0.5)));
+}
+
 void HybridLive2DModel::loadExpression(const std::string& name, const std::string& json) {
     std::lock_guard lock(_mutex);
     _userModel->loadExpression(name, json);

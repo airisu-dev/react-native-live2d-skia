@@ -62,6 +62,11 @@ export interface Live2DModel extends HybridObject<{ ios: 'c++'; android: 'c++' }
   stopMotion(): void
   /** Whether a motion, idle ones included, is playing. */
   isMotionPlaying(): boolean
+  /**
+   * Stops the playing motion and eases every parameter back to its default value over
+   * `fadeSeconds` (default 0.5, 0 snaps). Held parameters stay on top.
+   */
+  resetPose(fadeSeconds?: number): void
   loadExpression(name: string, json: string): void
   /**
    * Fades to a loaded expression, or a random one without `name`.

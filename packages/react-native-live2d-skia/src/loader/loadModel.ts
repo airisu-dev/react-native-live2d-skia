@@ -58,6 +58,12 @@ export interface Live2DModel {
   stopMotion(): void
   /** Whether a motion, idle ones included, is playing. */
   isMotionPlaying(): boolean
+  /**
+   * Stops the playing motion and eases the model back to its default pose over `fadeSeconds`
+   * (default 0.5, 0 snaps). `stopMotion` alone leaves it where the motion was. Held parameters
+   * (`setParameter`, e.g. face tracking) stay on top and don't jump.
+   */
+  resetPose(fadeSeconds?: number): void
   /** Fades to an expression, a random one without `name`. Returns false if there's none. */
   expression(name?: string): boolean
   resetExpression(): void
@@ -209,6 +215,7 @@ export async function loadLive2DModel(
     motion: (group, index, priority) => native.startMotion(group, index, priority),
     stopMotion: () => native.stopMotion(),
     isMotionPlaying: () => native.isMotionPlaying(),
+    resetPose: (fadeSeconds) => native.resetPose(fadeSeconds),
     expression: (name) => native.setExpression(name),
     resetExpression: () => native.clearExpression(),
     // Native clamps to the range and ignores ids the model doesn't have.

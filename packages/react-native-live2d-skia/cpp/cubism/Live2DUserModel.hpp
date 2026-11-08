@@ -31,6 +31,8 @@ class Live2DUserModel : public csm::CubismUserModel {
         bool startRandomMotion(const std::string& group, Priority priority);
         void stopMotion();
         bool isMotionPlaying();
+        // Stops motions and eases every parameter to its default over `fadeSeconds` (0 snaps).
+        void resetPose(float fadeSeconds);
         void loadExpression(const std::string& name, const std::string& json);
         bool setExpression(const std::string& name);
         bool setRandomExpression();
@@ -64,6 +66,9 @@ class Live2DUserModel : public csm::CubismUserModel {
         std::map<csm::CubismIdHandle, HeldParameter> _heldParameters;
         float _parameterSmoothing = 0;
         bool _idleMotionEnabled = true;
+        // Seconds left of a resetPose fade, 0 when none runs.
+        float _poseResetRemaining = 0;
+        void easeToDefaultPose(float deltaSeconds);
         // Read by the eye blink updater: no blinking while a motion moves the eyes.
         csm::csmBool _motionUpdated = false;
 };

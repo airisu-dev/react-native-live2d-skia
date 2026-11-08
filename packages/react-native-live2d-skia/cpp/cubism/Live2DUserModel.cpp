@@ -126,6 +126,8 @@ void Live2DUserModel::update(float deltaSeconds) {
     // Same order as the SDK sample's LAppModel::Update.
     _motionUpdated = false;
     _model->LoadParameters();
+    // Before motions, so one started during the fade blends in from the easing pose.
+    if (_poseResetRemaining > 0) easeToDefaultPose(deltaSeconds);
     if (_motionManager->IsFinished()) {
         if (_idleMotionEnabled) startRandomMotion("Idle", PriorityIdle);
     } else {
