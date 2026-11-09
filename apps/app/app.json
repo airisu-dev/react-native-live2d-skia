@@ -57,7 +57,8 @@
         {
           "cubismSdkPath": "./vendor/CubismSdkForNative"
         }
-      ]
+      ],
+      "expo-status-bar"
     ],
     "experiments": {
       "typedRoutes": true,
