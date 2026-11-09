@@ -5,7 +5,7 @@ import {
   presentationDragIndicator,
 } from '@expo/ui/swift-ui/modifiers'
 import { useRef } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { StyleSheet, useWindowDimensions, View } from 'react-native'
 import { colors, spacing } from '@/theme'
 import { type NativeSheetProps, SheetCloseContext } from './sheetContext'
 
@@ -16,6 +16,7 @@ const PRESENTATION = [
 ]
 
 export function NativeSheet({ open, onClose, children }: NativeSheetProps) {
+  const { width } = useWindowDimensions()
   const afterClose = useRef<(() => void) | null>(null)
 
   const close = (after?: () => void) => {
@@ -45,7 +46,7 @@ export function NativeSheet({ open, onClose, children }: NativeSheetProps) {
         >
           <Group modifiers={PRESENTATION}>
             <RNHostView matchContents={{ vertical: true }}>
-              <View style={styles.body}>{children}</View>
+              <View style={[styles.body, { width }]}>{children}</View>
             </RNHostView>
           </Group>
         </BottomSheet>
