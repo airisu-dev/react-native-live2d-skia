@@ -57,9 +57,7 @@ export function FabCluster({
       style={[
         styles.root,
         { bottom: insets.bottom + FAB_BOTTOM },
-        side === 'left'
-          ? { left: insets.left + SIDE_MARGIN }
-          : { right: insets.right + SIDE_MARGIN },
+        side === 'left' ? { left: SIDE_MARGIN } : { right: SIDE_MARGIN },
       ]}
     >
       {side === 'left' ? (
